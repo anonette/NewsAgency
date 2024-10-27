@@ -24,7 +24,7 @@ warnings.filterwarnings('ignore', category=FutureWarning)
 
 # Country configuration
 COUNTRY_CONFIG = {
-    'code': 'LB',
+    'code': 'LE',
     'name': 'Lebanon',
     'news_query': 'Lebanon OR Lebanese OR Beirut OR Hezbollah',  # Added more terms to get more results
     'lang_code': 'ar'  # Arabic language code for Google Translate
@@ -63,9 +63,13 @@ def generate_audio(text):
         response = requests.post(url, json=data, headers=headers)
         
         if response.status_code == 200:
+            # Create country-specific directory in archive
+            country_dir = os.path.join('archive', COUNTRY_CONFIG['code'])
+            os.makedirs(country_dir, exist_ok=True)
+            
             # Generate filename with timestamp
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            audio_file = f"LE_{timestamp}_analysis.mp3"
+            audio_file = os.path.join(country_dir, f"LE_{timestamp}_analysis.mp3")
             with open(audio_file, "wb") as f:
                 f.write(response.content)
             print(f"Audio saved as: {audio_file}")
