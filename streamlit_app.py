@@ -8,7 +8,7 @@ import os
 
 def get_latest_audio_file(country_prefix):
     """Get the most recent audio file for the given country prefix"""
-    pattern = f"{country_prefix}_*_analysis.mp3"
+    pattern = f"archive/{country_prefix}_*_analysis.mp3"
     files = glob.glob(pattern)
     if files:
         return max(files, key=os.path.getctime)
@@ -44,7 +44,7 @@ def main():
         st.markdown("")  # Spacing
         st.markdown("")  # Spacing
         st.markdown("""
-        <a href="http://localhost:8502" target="_blank" style="
+        <a href="http://localhost:8503" target="_blank" style="
             text-decoration: none;
             background-color: #f0f2f6;
             color: #262730;
