@@ -10,7 +10,7 @@ import io
 ARCHIVE_DIR = "archive"
 COUNTRIES = {
     "IL": "Israel",
-    "LE": "Lebanon",
+    "LB": "Lebanon",  # Changed from 'LE' to 'LB' to match lebanon_trends.py
     "IR": "Iran"
 }
 
