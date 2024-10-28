@@ -24,7 +24,7 @@ warnings.filterwarnings('ignore', category=FutureWarning)
 
 # Country configuration
 COUNTRY_CONFIG = {
-    'code': 'LE',
+    'code': 'LB',  # Changed from 'LE' to 'LB' for correct Google Trends country code
     'name': 'Lebanon',
     'news_query': 'Lebanon OR Lebanese OR Beirut OR Hezbollah',  # Added more terms to get more results
     'lang_code': 'ar'  # Arabic language code for Google Translate
@@ -69,7 +69,7 @@ def generate_audio(text):
             
             # Generate filename with timestamp
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            audio_file = os.path.join(country_dir, f"LE_{timestamp}_analysis.mp3")
+            audio_file = os.path.join(country_dir, f"LB_{timestamp}_analysis.mp3")
             with open(audio_file, "wb") as f:
                 f.write(response.content)
             print(f"Audio saved as: {audio_file}")
@@ -83,6 +83,14 @@ def generate_audio(text):
     except Exception as e:
         print(f"Error with text-to-speech: {str(e)}")
         return False
+
+def save_analysis_log(headlines, trends_data, analysis):
+    """Save analysis log to text archive"""
+    try:
+        from text_archive import save_analysis_log
+        save_analysis_log(COUNTRY_CONFIG['code'], headlines, trends_data, analysis)
+    except Exception as e:
+        print(f"Error saving analysis log: {str(e)}")
 
 def is_news_source(text):
     """Check if the term is a news source"""
@@ -312,6 +320,10 @@ def fetch_trends():
                 # Generate audio version
                 print("\n🔊 Generating audio version...")
                 generate_audio(analysis)
+                
+                # Save text log
+                print("\n📝 Saving analysis log...")
+                save_analysis_log(headlines, trends_data, analysis)
                 
                 return {
                     'headlines': headlines,
