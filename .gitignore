@@ -3,3 +3,5 @@ google_drive_credentials.json
 __pycache__/
 *.pyc
 .DS_Store
+*.mp3
+text_archive/
