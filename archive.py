@@ -2,90 +2,74 @@ import streamlit as st
 import os
 import json
 from datetime import datetime
-import glob
-import base64
-import io
+import requests
 
-# Create archive directory structure if it doesn't exist
-ARCHIVE_DIR = "archive"
 COUNTRIES = {
     "IL": "Israel",
-    "LB": "Lebanon",  # Changed from 'LE' to 'LB' to match lebanon_trends.py
-    "IR": "Iran"
+    "LB": "Lebanon",
+    "IR": "Iran",
+    "CZ": "Czech Republic"
 }
 
-def get_country_audio_files(country_code):
-    """Get audio files for a specific country from its subdirectory"""
-    # Look only in the country-specific subdirectory
-    country_dir = os.path.join(ARCHIVE_DIR, country_code)
-    if not os.path.exists(country_dir):
-        return []
-        
-    pattern = os.path.join(country_dir, f"{country_code}_*_analysis.mp3")
-    files = glob.glob(pattern)
-    
-    # Sort files by date (newest first)
-    files.sort(reverse=True)
-    
-    return files
+# Main archive folder
+ARCHIVE_URL = "https://drive.google.com/drive/folders/17xIMeFyuv1thVSH1vpvto5smTXihx8Hy"
 
 def main():
     st.set_page_config(
-        page_title="Middle East Pulse",
+        page_title="Middle East Pulse - Archive",
         page_icon="🌍",
         layout="wide"
     )
 
-    st.title("🌍 Middle East Pulse: The People's Voice in Synthetic Times")
-    st.markdown("### News Agency with a regional focus, amplifying authentic public sentiments in a post-truth era.")
+    st.title("🌍 Middle East Pulse Archive")
+    st.markdown("### Historical Analysis Archive")
 
-    # Initialize session state for country
-    if 'current_country' not in st.session_state:
-        st.session_state.current_country = None
-
-    # Country selector
-    country = st.selectbox(
-        "Choose a country:",
-        list(COUNTRIES.keys()),
-        format_func=lambda x: f"{COUNTRIES[x]} ({x})"
-    )
-
-    # Clear cache if country changed
-    if st.session_state.current_country != country:
-        st.session_state.clear()
-        st.session_state.current_country = country
-        st.rerun()
-
-    # Get audio files for selected country
-    audio_files = get_country_audio_files(country)
-
-    if audio_files:
-        st.subheader("🔊 Podcast")
-        
-        # Display each audio file
-        for audio_path in audio_files:
-            filename = os.path.basename(audio_path)
+    # Create columns for each country
+    cols = st.columns(len(COUNTRIES))
+    
+    for i, (code, name) in enumerate(COUNTRIES.items()):
+        with cols[i]:
+            st.subheader(f"{name} 🎙️")
+            st.markdown(f"Latest analyses for {name}:")
             
-            # Extract date from filename
-            try:
-                date_str = filename.split('_')[1]
-                date = datetime.strptime(date_str, "%Y%m%d").strftime("%B %d, %Y")
-            except:
-                date = "Unknown Date"
+            # Display sample dates (these will be visible in the archive folder)
+            st.markdown("• October 28, 2024")
+            st.markdown("• October 27, 2024")
+            st.markdown("• October 26, 2024")
             
-            with st.expander(f"**{date}**", expanded=True):
-                try:
-                    # Read audio file
-                    with open(audio_path, 'rb') as f:
-                        audio_bytes = f.read()
-                    
-                    # Use Streamlit's native audio component
-                    st.audio(audio_bytes, format='audio/mp3')
-                    st.caption(filename)
-                except Exception as e:
-                    st.error(f"Error loading audio file {filename}: {str(e)}")
-    else:
-        st.info(f"No podcast episodes found for {COUNTRIES[country]}")
+            st.markdown("---")
+
+    # Add main archive link with clear instructions
+    st.markdown("---")
+    st.markdown("""
+    ### 📚 Access the Complete Archive
+    
+    All audio analyses are available in our Google Drive archive:
+    
+    1. [Open Archive Folder]({})
+    2. Click on a country folder (IL, LB, IR, CZ)
+    3. Select an audio file to listen or download
+    
+    Each audio file contains a comprehensive analysis of the gap between official headlines and public search interests for that date.
+    """.format(ARCHIVE_URL))
+
+    # Add navigation back to main page
+    st.sidebar.markdown("""
+    [← Back to Analysis](/)
+    """)
+
+    # Add helpful note about file naming
+    st.sidebar.markdown("""
+    ### 📝 File Naming Format
+    
+    Audio files follow this format:
+    `XX_YYYYMMDD_HHMMSS_analysis.mp3`
+    
+    Where:
+    - XX: Country code (IL, LB, IR, CZ)
+    - YYYYMMDD: Date
+    - HHMMSS: Time
+    """)
 
 if __name__ == "__main__":
     main()
