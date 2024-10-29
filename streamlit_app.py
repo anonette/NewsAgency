@@ -2,31 +2,7 @@ import streamlit as st
 from israel_trends import fetch_trends as fetch_israel_trends
 from lebanon_trends import fetch_trends as fetch_lebanon_trends
 from iran_trends import fetch_trends as fetch_iran_trends
-import base64
-import glob
-import os
-
-def get_latest_audio_file(country_prefix):
-    """Get the most recent audio file for the given country prefix"""
-    pattern = f"archive/{country_prefix}_*_analysis.mp3"
-    files = glob.glob(pattern)
-    if files:
-        return max(files, key=os.path.getctime)
-    return None
-
-def get_audio_player_html(audio_path):
-    """Generate HTML code for audio player"""
-    audio_placeholder = st.empty()
-    with open(audio_path, "rb") as f:
-        audio_bytes = f.read()
-    audio_base64 = base64.b64encode(audio_bytes).decode()
-    audio_player = f"""
-        <audio controls>
-            <source src="data:audio/mp3;base64,{audio_base64}" type="audio/mp3">
-            Your browser does not support the audio element.
-        </audio>
-    """
-    return audio_player
+from czech_trends import fetch_trends as fetch_czech_trends
 
 def main():
     st.set_page_config(
@@ -35,33 +11,15 @@ def main():
         layout="wide"
     )
 
-    # Header with Archive Link
-    col1, col2 = st.columns([6, 1])
-    with col1:
-        st.title("🔍 Official News vs. Real Searches")
-        st.markdown("### Revealing the Gap Between Headlines and Reality")
-    with col2:
-        st.markdown("")  # Spacing
-        st.markdown("")  # Spacing
-        st.markdown("""
-        <a href="http://localhost:8503" target="_blank" style="
-            text-decoration: none;
-            background-color: #f0f2f6;
-            color: #262730;
-            padding: 0.5rem 1rem;
-            border-radius: 0.5rem;
-            border: 1px solid #e0e2e6;
-            font-weight: 500;
-            display: inline-block;
-            text-align: center;
-        ">📚 View Archive</a>
-        """, unsafe_allow_html=True)
+    st.title("🔍 Official News vs. Real Searches")
+    st.markdown("### Revealing the Gap Between Headlines and Reality")
 
     # Country selector with flags
     country_options = {
         "Israel": ("IL", "🇮🇱", fetch_israel_trends),
-        "Lebanon": ("LE", "🇱🇧", fetch_lebanon_trends),
-        "Iran": ("IR", "🇮🇷", fetch_iran_trends)
+        "Lebanon": ("LB", "🇱🇧", fetch_lebanon_trends),
+        "Iran": ("IR", "🇮🇷", fetch_iran_trends),
+        "Czech Republic": ("CZ", "🇨🇿", fetch_czech_trends)
     }
 
     # Create two columns for layout
@@ -128,15 +86,9 @@ def main():
                 st.markdown("---")
                 st.header("🎭 The Reality Behind the Headlines")
                 st.markdown(results['analysis'])
-                
-                # Show audio player if file exists
-                audio_file = get_latest_audio_file(code)
-                if audio_file:
-                    st.subheader("🔊 Listen to Analysis")
-                    st.markdown("---")
-                    audio_player = get_audio_player_html(audio_file)
-                    st.markdown(audio_player, unsafe_allow_html=True)
-                    st.caption(f"Audio file: {os.path.basename(audio_file)}")
+
+    # Add navigation hint
+    st.sidebar.markdown("→ View historical analyses in the Archive page")
 
 if __name__ == "__main__":
     main()

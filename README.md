@@ -1,54 +1,78 @@
 # Trends to Stories
 
-A web application that analyzes the gap between official news narratives and what people actually care about, revealed through their search patterns. The app generates psychological insights from the contrast between headlines and search trends, presenting them in both text and audio formats.
+A Streamlit application that analyzes search trends and news headlines across multiple countries, generating audio summaries of the findings.
+
+## Quick Deploy to Streamlit Cloud
+
+1. Fork this repository to your GitHub account
+
+2. Go to [Streamlit Cloud](https://streamlit.io/cloud)
+
+3. Click "New app" and select your forked repository
+
+4. Configure the deployment:
+   - Repository: Your forked repository
+   - Branch: main
+   - Main file path: streamlit_app.py
+
+5. Add these secrets in Streamlit Cloud settings:
+   ```
+   OPENAI_API_KEY = "your-openai-api-key"
+   NEWSAPI_KEY = "your-newsapi-key"
+   ```
+
+6. Click "Deploy"
+
+## Local Development Setup
+
+1. Clone the repository
+
+2. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. Create a .env file with your API keys:
+   ```
+   OPENAI_API_KEY=your-openai-api-key
+   NEWSAPI_KEY=your-newsapi-key
+   ```
+
+4. Run the app:
+   ```bash
+   streamlit run streamlit_app.py
+   ```
+
+## Project Structure
+
+- `streamlit_app.py`: Main Streamlit application
+- `archive.py`: Archive page for audio files
+- `*_trends.py`: Country-specific trend analysis modules
+- `core_utils.py`: Shared utility functions
+- `requirements.txt`: Project dependencies
 
 ## Features
 
-- Fetches current news headlines about Israel
-- Retrieves trending Google searches and related suggestions
-- Generates insightful analysis using GPT-4
-- Converts analysis to speech using ElevenLabs
-- Presents everything in a clean web interface using Streamlit
+- Real-time trend analysis for multiple countries
+- Comparison of official headlines with public search interests
+- AI-generated analysis of the gap between news and searches
+- Audio summaries accessible via Google Drive
+- Archive view of historical analyses
 
-## Setup
+## Audio Files
 
-1. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
+Audio files are stored in a public Google Drive folder for easy access:
+[Archive Folder](https://drive.google.com/drive/folders/17xIMeFyuv1thVSH1vpvto5smTXihx8Hy)
 
-2. Create a `.env` file with your API keys:
-```
-OPENAI_API_KEY=your_openai_key
-NEWS_API_KEY=your_newsapi_key
-ELEVENLABS_API_KEY=your_elevenlabs_key
-```
+## Pages
 
-## Usage
+1. Main Page (`/`):
+   - Country selection
+   - Real-time trend analysis
+   - Comparison of headlines and searches
+   - AI-generated insights
 
-Run the Streamlit app:
-```bash
-streamlit run app.py
-```
-
-The app will be available at http://localhost:8501
-
-## How it Works
-
-1. The app fetches current news headlines about Israel using the NewsAPI
-2. It retrieves trending Google searches from Israel
-3. For each trend, it gets related search suggestions
-4. GPT-4 analyzes the contrast between official headlines and search trends
-5. The analysis is converted to speech using ElevenLabs
-6. Everything is presented in a web interface where you can:
-   - View the official headlines
-   - See what people are actually searching for
-   - Read the psychological analysis
-   - Listen to the analysis being read aloud
-
-## Files
-
-- `app.py`: Streamlit web interface
-- `test_trends.py`: Core functionality for fetching and analyzing trends
-- `requirements.txt`: Project dependencies
-- `.env`: API keys and configuration
+2. Archive Page (`/archive`):
+   - Historical audio analyses
+   - Organized by country and date
+   - Direct access to audio files

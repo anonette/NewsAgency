@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<!-- Previous head and style sections remain exactly the same until the script tag -->
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trends Analysis Archive</title>
+    <style>
+        /* Previous styles remain exactly the same */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 40px;
+        }
+
+        .countries {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .country-card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .country-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .country-flag {
+            font-size: 3em;
+            margin-bottom: 10px;
+        }
+
+        .country-info {
+            color: #666;
+            font-size: 0.9em;
+            margin-top: 10px;
+        }
+
+        .date-filter {
+            display: none;
+            margin: 20px 0;
+            text-align: center;
+        }
+
+        .date-filter.active {
+            display: block;
+        }
+
+        .date-filter select {
+            padding: 8px 15px;
+            font-size: 1em;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+        }
+
+        .back-button {
+            display: none;
+            padding: 10px 20px;
+            background: #2c3e50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-bottom: 20px;
+        }
+
+        .back-button:hover {
+            background: #34495e;
+        }
+
+        .file-item {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .file-date {
+            font-size: 1.2em;
+            color: #2c3e50;
+            margin-bottom: 15px;
+        }
+
+        audio {
+            width: 100%;
+            margin: 15px 0;
+        }
+
+        .analysis-section {
+            margin-top: 20px;
+        }
+
+        .headlines-list {
+            list-style-type: none;
+            padding: 0;
+            margin: 0 0 20px 0;
+        }
+
+        .headlines-list li {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .headlines-list li:last-child {
+            border-bottom: none;
+        }
+
+        .trend-item {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .trend-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #2c3e50;
+        }
+
+        .related-searches {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .related-search-item {
+            background: #e9ecef;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 0.9em;
+            color: #495057;
+        }
+
+        .analysis-text {
+            margin-top: 20px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            color: #495057;
+        }
+
+        h3 {
+            color: #2c3e50;
+            margin: 20px 0 15px 0;
+        }
+
+        .files-container {
+            display: none;
+        }
+
+        .files-container.active {
+            display: block;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            font-style: italic;
+            color: #666;
+        }
+
+        .error {
+            text-align: center;
+            padding: 20px;
+            color: #dc3545;
+            background: #f8d7da;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Trends Analysis Archive</h1>
+        
+        <div class="countries">
+            <div class="country-card" data-country="IL">
+                <div class="country-flag">🇮🇱</div>
+                <h2>Israel</h2>
+                <div class="country-info">
+                    Analysis of trends and headlines from Israel
+                </div>
+            </div>
+            
+            <div class="country-card" data-country="LB">
+                <div class="country-flag">🇱🇧</div>
+                <h2>Lebanon</h2>
+                <div class="country-info">
+                    Analysis of trends and headlines from Lebanon
+                </div>
+            </div>
+            
+            <div class="country-card" data-country="IR">
+                <div class="country-flag">🇮🇷</div>
+                <h2>Iran</h2>
+                <div class="country-info">
+                    Analysis of trends and headlines from Iran
+                </div>
+            </div>
+            
+            <div class="country-card" data-country="CZ">
+                <div class="country-flag">🇨🇿</div>
+                <h2>Czech Republic</h2>
+                <div class="country-info">
+                    Analysis of trends and headlines from Czech Republic
+                </div>
+            </div>
+        </div>
+
+        <div class="date-filter">
+            <label for="date-select">Select Date:</label>
+            <select id="date-select"></select>
+        </div>
+
+        <button class="back-button">← Back to Countries</button>
+        
+        <div class="files-container"></div>
+    </div>
+
+    <script>
+        const countryCards = document.querySelectorAll('.country-card');
+        const filesContainer = document.querySelector('.files-container');
+        const backButton = document.querySelector('.back-button');
+        const dateFilter = document.querySelector('.date-filter');
+        const dateSelect = document.querySelector('#date-select');
+        
+        const countryNames = {
+            'IL': 'Israel',
+            'LB': 'Lebanon',
+            'IR': 'Iran',
+            'CZ': 'Czech Republic'
+        };
+
+        function formatDate(filename) {
+            // Extract date from filename format: XX_YYYYMMDD_HHMMSS
+            const match = filename.match(/\d{8}/);
+            if (!match) return 'Unknown Date';
+            
+            const dateStr = match[0];
+            const year = dateStr.slice(0, 4);
+            const month = dateStr.slice(4, 6);
+            const day = dateStr.slice(6, 8);
+            
+            const date = new Date(year, month - 1, day);
+            return date.toLocaleDateString('en-US', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+        }
+
+        function renderTrends(trends) {
+            return trends.map(trend => `
+                <div class="trend-item">
+                    <div class="trend-title">${trend.title}</div>
+                    <div class="related-searches">
+                        ${trend.related.map(search => `
+                            <span class="related-search-item">${search}</span>
+                        `).join('')}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function loadAnalysisData(country, filename) {
+            try {
+                const response = await fetch(`../text_archive/${country}/${filename}`);
+                if (!response.ok) {
+                    throw new Error('Failed to load analysis data');
+                }
+                return await response.json();
+            } catch (error) {
+                console.error('Error loading analysis data:', error);
+                return null;
+            }
+        }
+
+        async function populateDateSelect(country) {
+            try {
+                const response = await fetch(`/list/${country}`);
+                if (!response.ok) {
+                    throw new Error('Failed to load dates');
+                }
+                const files = await response.json();
+                
+                if (files.length === 0) {
+                    dateSelect.innerHTML = '<option value="">No dates available</option>';
+                    return false;
+                }
+
+                dateSelect.innerHTML = files.map(file => `
+                    <option value="${file}">${formatDate(file)}</option>
+                `).join('');
+                
+                return true;
+            } catch (error) {
+                console.error('Error loading dates:', error);
+                dateSelect.innerHTML = '<option value="">Error loading dates</option>';
+                return false;
+            }
+        }
+
+        async function showAnalysis(country, filename) {
+            filesContainer.innerHTML = '<div class="loading">Loading analysis...</div>';
+
+            try {
+                const data = await loadAnalysisData(country, filename);
+                if (!data) {
+                    filesContainer.innerHTML = '<div class="error">Failed to load analysis data.</div>';
+                    return;
+                }
+
+                const audioFilename = filename.replace('_log.json', '_analysis.mp3');
+                const audioPath = `../archive/${country}/${audioFilename}`;
+                
+                let html = `
+                    <div class="file-item">
+                        <div class="file-date">${formatDate(filename)}</div>
+                        <audio controls>
+                            <source src="${audioPath}" type="audio/mpeg">
+                            Your browser does not support the audio element.
+                        </audio>
+                        
+                        <div class="analysis-section">
+                            <h3>Official Headlines</h3>
+                            <ul class="headlines-list">
+                                ${data.headlines.map(headline => `<li>${headline}</li>`).join('')}
+                            </ul>
+                            
+                            <h3>Google Trends</h3>
+                            ${renderTrends(data.trends)}
+
+                            ${data.analysis ? `
+                                <h3>Analysis</h3>
+                                <div class="analysis-text">
+                                    ${data.analysis}
+                                </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+
+                filesContainer.innerHTML = html;
+            } catch (error) {
+                console.error('Error displaying analysis:', error);
+                filesContainer.innerHTML = '<div class="error">Error loading analysis data.</div>';
+            }
+        }
+
+        countryCards.forEach(card => {
+            card.addEventListener('click', async () => {
+                const country = card.dataset.country;
+                
+                filesContainer.innerHTML = '<div class="loading">Loading data...</div>';
+                filesContainer.classList.add('active');
+                dateFilter.classList.add('active');
+                backButton.style.display = 'block';
+                document.querySelector('.countries').style.display = 'none';
+
+                const hasFiles = await populateDateSelect(country);
+                if (hasFiles) {
+                    const firstFile = dateSelect.value;
+                    if (firstFile) {
+                        await showAnalysis(country, firstFile);
+                    }
+
+                    dateSelect.onchange = () => {
+                        showAnalysis(country, dateSelect.value);
+                    };
+                } else {
+                    filesContainer.innerHTML = '<div class="error">No analysis files available yet.</div>';
+                }
+            });
+        });
+
+        backButton.addEventListener('click', () => {
+            filesContainer.classList.remove('active');
+            dateFilter.classList.remove('active');
+            backButton.style.display = 'none';
+            document.querySelector('.countries').style.display = 'grid';
+        });
+    </script>
+</body>
+</html>

@@ -1,5 +1,5 @@
-/venv
-output/
-__pycache__/
 .env
-/archive
+google_drive_credentials.json
+__pycache__/
+*.pyc
+.DS_Store
