@@ -3,6 +3,7 @@ import json
 from datetime import datetime
 import requests
 from bs4 import BeautifulSoup
+import re
 
 # Configuration and setup
 st.set_page_config(
@@ -33,59 +34,112 @@ def fetch_directories():
 
 def fetch_files(subfolder=""):
     """Fetch files from a specific country directory"""
+    # Fetch MP3 files from country directory
     url = base_url + subfolder
+    # st.write(f"DEBUG: Fetching MP3 files from URL: {url}")
+    
+    # Fetch JSON files from text_archive directory
+    json_url = base_url + "text_archive/" + subfolder
+    # st.write(f"DEBUG: Fetching JSON files from URL: {json_url}")
+    
+    mp3_files = []
+    json_files = []
+    
+    # Get MP3 files
     response = requests.get(url)
     if response.status_code == 200:
         soup = BeautifulSoup(response.text, 'html.parser')
-        files = [link.get('href') for link in soup.find_all('a') 
-                if not link.get('href').endswith('/') and link.get('href') != '../']
+        mp3_files = [link.get('href') for link in soup.find_all('a') 
+                    if not link.get('href').endswith('/') 
+                    and not link.get('href').endswith('.ini')
+                    and link.get('href').endswith('.mp3')]
+    
+    # Get JSON files
+    response = requests.get(json_url)
+    if response.status_code == 200:
+        soup = BeautifulSoup(response.text, 'html.parser')
+        json_files = [link.get('href') for link in soup.find_all('a') 
+                     if not link.get('href').endswith('/') 
+                     and link.get('href').endswith('.json')]
+    
+    # st.write(f"DEBUG: Found {len(mp3_files)} MP3 files: {mp3_files}")
+    # st.write(f"DEBUG: Found {len(json_files)} JSON files: {json_files}")
+    
+    # Group files by date
+    file_pairs = []
+    dates = set()
+    
+    # Extract dates using regex to handle timestamps
+    date_pattern = re.compile(r'_(\d{8})_\d{6}_')
+    
+    # Get dates from both MP3 and JSON files
+    for file in mp3_files + json_files:
+        match = date_pattern.search(file)
+        if match:
+            date_str = match.group(1)
+            dates.add(date_str)
+            # st.write(f"DEBUG: Extracted date {date_str} from {file}")
+    
+    # st.write(f"DEBUG: Extracted dates: {dates}")
+    
+    for date_str in dates:
+        # Use regex to find files for this date
+        json_pattern = re.compile(f'_{date_str}_\\d{{6}}_log\\.json$')
+        mp3_pattern = re.compile(f'_{date_str}_\\d{{6}}_analysis\\.mp3$')
         
-        # Group files by date
-        file_pairs = []
-        dates = set()
+        json_matches = [f for f in json_files if json_pattern.search(f)]
+        mp3_matches = [f for f in mp3_files if mp3_pattern.search(f)]
         
-        for file in files:
-            if '_log.json' in file or '_analysis.mp3' in file:
-                date_str = file.split('_')[1]
-                dates.add(date_str)
+        # Sort by timestamp to get latest version
+        json_match = sorted(json_matches)[-1] if json_matches else None
+        mp3_match = sorted(mp3_matches)[-1] if mp3_matches else None
         
-        for date_str in dates:
-            json_match = next((f for f in files if f'_{date_str}_log.json' in f), None)
-            mp3_match = next((f for f in files if f'_{date_str}_analysis.mp3' in f), None)
-            
-            file_pairs.append({
-                'date': date_str,
-                'json': json_match,
-                'mp3': mp3_match
-            })
+        # st.write(f"DEBUG: For date {date_str}:")
+        # st.write(f"DEBUG: JSON matches: {json_matches}")
+        # st.write(f"DEBUG: MP3 matches: {mp3_matches}")
+        # st.write(f"DEBUG: Selected JSON: {json_match}")
+        # st.write(f"DEBUG: Selected MP3: {mp3_match}")
         
-        return sorted(file_pairs, key=lambda x: x['date'], reverse=True)
-    else:
-        st.error(f"Could not fetch files. Server returned status: {response.status_code}")
-        return []
+        file_pairs.append({
+            'date': date_str,
+            'json': json_match,
+            'mp3': mp3_match
+        })
+    
+    return sorted(file_pairs, key=lambda x: x['date'], reverse=True)
 
 def load_json_data(subfolder, json_file):
     """Load JSON data from file"""
     try:
         if not json_file:
+            # st.write("DEBUG: No JSON file provided")
             return None
             
-        url = base_url + subfolder + json_file
+        # JSON files are in text_archive directory
+        url = base_url + "text_archive/" + subfolder + json_file
+        # st.write(f"DEBUG: Loading JSON from URL: {url}")
+        
         response = requests.get(url)
+        # st.write(f"DEBUG: JSON response status: {response.status_code}")
+        
         if response.status_code == 200:
             data = response.json()
+            # st.write(f"DEBUG: JSON keys present: {list(data.keys())}")
             if not all(key in data for key in ['headlines', 'trends']):
                 raise ValueError("Missing required fields in JSON data")
             return data
         return None
     except Exception as e:
         st.error(f"Error loading data: {str(e)}")
+        st.write(f"DEBUG: Exception details: {type(e).__name__}: {str(e)}")
         return None
 
 def format_date(file_pair):
     """Format date from filename"""
     try:
         date_str = file_pair['date']
+        # st.write(f"DEBUG: Formatting date string: {date_str}")
+        
         date = datetime.strptime(date_str, '%Y%m%d')
         formatted = date.strftime('%A, %B %d, %Y')
         
@@ -96,11 +150,15 @@ def format_date(file_pair):
         if not file_pair['mp3']:
             status.append("No Audio")
             
+        # st.write(f"DEBUG: File status - JSON: {'Present' if file_pair['json'] else 'Missing'}, MP3: {'Present' if file_pair['mp3'] else 'Missing'}")
+        
         if status:
             formatted += f" ({', '.join(status)})"
             
+        # st.write(f"DEBUG: Final formatted date: {formatted}")
         return formatted
-    except:
+    except ValueError as e:
+        st.write(f"DEBUG: Date formatting error: {str(e)}")
         return file_pair['date']
 
 # Add custom CSS
