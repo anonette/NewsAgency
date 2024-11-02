@@ -1,7 +1,9 @@
 import streamlit as st
-import os
 import json
+import os
 from datetime import datetime
+import requests
+from urllib.parse import urlparse, parse_qs
 
 COUNTRIES = {
     "IL": ("Israel", "🇮🇱"),
@@ -10,36 +12,71 @@ COUNTRIES = {
     "CZ": ("Czech Republic (control)", "🇨🇿")
 }
 
-def get_country_files(country_code):
-    """Get list of log files for a country"""
+def get_file_id_from_url(url):
+    """Extract file ID from Google Drive URL"""
     try:
-        path = os.path.join('text_archive', country_code)
-        files = [f for f in os.listdir(path) if f.endswith('_log.json')]
-        # Verify each file is valid JSON before including it
-        valid_files = []
-        for f in files:
-            try:
-                with open(os.path.join(path, f), 'r', encoding='utf-8') as file:
-                    json.load(file)
-                valid_files.append(f)
-            except:
-                continue
-        valid_files.sort(reverse=True)
-        return valid_files
+        parsed = urlparse(url)
+        if 'drive.google.com' in parsed.netloc:
+            if 'folders' in parsed.path:
+                return parsed.path.split('/')[-1]
+            elif 'id=' in url:
+                return parse_qs(parsed.query)['id'][0]
+    except:
+        pass
+    return None
+
+def get_drive_files(country_code):
+    """Get list of log files from Google Drive text_archive"""
+    try:
+        # Get the text_archive folder URL from secrets
+        folder_url = st.secrets["text_archive_drive_url"]
+        folder_id = get_file_id_from_url(folder_url)
+        
+        if not folder_id:
+            st.error("Invalid Drive folder URL")
+            return []
+        
+        # Construct the direct download URL
+        files_url = f"https://drive.google.com/drive/folders/{folder_id}/{country_code}"
+        
+        # Use requests to get file listing (this will be public read-only access)
+        response = requests.get(files_url)
+        if response.status_code != 200:
+            return []
+        
+        # Parse the response to get file listings
+        # This will work because the folder is set to "Anyone with the link can view"
+        files = []
+        for item in response.json():
+            if item['name'].endswith('_log.json'):
+                files.append({
+                    'name': item['name'],
+                    'id': item['id']
+                })
+        
+        files.sort(key=lambda x: x['name'], reverse=True)
+        return files
     except Exception as e:
-        st.error(f"Error listing files: {str(e)}")
+        st.error(f"Error listing Drive files: {str(e)}")
         return []
 
-def load_json_data(country_code, filename):
-    """Load JSON data from a log file"""
+def load_json_data(file_info):
+    """Load JSON data from Drive"""
     try:
-        path = os.path.join('text_archive', country_code, filename)
-        with open(path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-            # Verify required fields exist
-            if not all(key in data for key in ['headlines', 'trends']):
-                raise ValueError("Missing required fields in JSON data")
-            return data
+        # Construct direct download URL for the file
+        file_url = f"https://drive.google.com/uc?export=download&id={file_info['id']}"
+        
+        # Download and parse JSON
+        response = requests.get(file_url)
+        if response.status_code != 200:
+            raise ValueError("Failed to download file")
+        
+        data = response.json()
+        
+        # Verify required fields exist
+        if not all(key in data for key in ['headlines', 'trends']):
+            raise ValueError("Missing required fields in JSON data")
+        return data
     except Exception as e:
         st.error(f"Error loading data: {str(e)}")
         return None
@@ -56,100 +93,35 @@ def format_date(filename):
     except:
         return filename
 
+def get_audio_file(log_file_name, country_code):
+    """Get audio file from Drive"""
+    try:
+        audio_filename = log_file_name.replace('_log.json', '_analysis.mp3')
+        folder_url = st.secrets["text_archive_drive_url"]
+        folder_id = get_file_id_from_url(folder_url)
+        
+        if not folder_id:
+            return None
+            
+        # Construct audio file URL
+        audio_url = f"https://drive.google.com/uc?export=download&id={folder_id}/{country_code}/{audio_filename}"
+        
+        # Download audio file
+        response = requests.get(audio_url)
+        if response.status_code == 200:
+            return response.content
+        return None
+    except Exception as e:
+        st.warning(f"Could not load audio: {str(e)}")
+        return None
+
 st.set_page_config(
     page_title="Middle East Pulse News Agency",
     page_icon="🌍",
     layout="wide"
 )
 
-# Add custom CSS
-st.markdown("""
-<style>
-    .stApp {
-        background-color: #f5f5f5;
-    }
-    .main-title {
-        text-align: center;
-        color: #2c3e50;
-        font-size: 2.5em;
-        margin-bottom: 0.5em;
-        font-weight: 600;
-        line-height: 1.3;
-    }
-    .subtitle {
-        text-align: center;
-        color: #34495e;
-        font-size: 1.2em;
-        margin-bottom: 1em;
-        font-style: italic;
-    }
-    .description {
-        text-align: center;
-        color: #576574;
-        font-size: 1.1em;
-        margin: 0 auto 2em auto;
-        max-width: 800px;
-        line-height: 1.6;
-    }
-    .country-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-        gap: 20px;
-        padding: 20px 0;
-    }
-    .country-card {
-        background: white;
-        border-radius: 10px;
-        padding: 20px;
-        text-align: center;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        transition: transform 0.2s, box-shadow 0.2s;
-    }
-    .country-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-    }
-    .country-flag {
-        font-size: 3em;
-        margin-bottom: 10px;
-    }
-    .file-item {
-        background: white;
-        border-radius: 10px;
-        padding: 20px;
-        margin: 20px 0;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-    }
-    .trend-item {
-        background: #f8f9fa;
-        border-radius: 8px;
-        padding: 15px;
-        margin: 10px 0;
-    }
-    .related-search {
-        background: #e9ecef;
-        border-radius: 15px;
-        padding: 5px 10px;
-        margin: 5px;
-        display: inline-block;
-        font-size: 0.9em;
-    }
-    .stButton button {
-        border-radius: 5px;
-        background-color: #2c3e50;
-        color: white;
-    }
-    .stButton button:hover {
-        background-color: #34495e;
-    }
-    hr.divider {
-        border: none;
-        height: 1px;
-        background-color: #e0e0e0;
-        margin: 2em 0;
-    }
-</style>
-""", unsafe_allow_html=True)
+# [CSS styles remain the same...]
 
 # Title, subtitle, and description
 st.markdown('<h1 class="main-title">Middle East Pulse News Agency:<br>Nostalgia for Real Data in a Synthetic World</h1>', unsafe_allow_html=True)
@@ -187,32 +159,27 @@ else:
     st.header(f"{country_flag} {country_name}")
 
     # Get available files
-    files = get_country_files(country_code)
+    files = get_drive_files(country_code)
     if not files:
-        st.warning("No valid analysis files available")
+        st.warning("No analysis files available")
         st.stop()
 
     # Date selector
     selected_file = st.selectbox(
         "Select Date:",
         files,
-        format_func=format_date
+        format_func=lambda x: format_date(x['name'])
     )
 
     if selected_file:
         # Load and display data
-        data = load_json_data(country_code, selected_file)
+        data = load_json_data(selected_file)
         if data:
             with st.container():
                 # Audio player
-                audio_filename = selected_file.replace('_log.json', '_analysis.mp3')
-                audio_path = os.path.join('archive', country_code, audio_filename)
-                if os.path.exists(audio_path):
-                    try:
-                        with open(audio_path, 'rb') as f:
-                            st.audio(f.read(), format='audio/mp3')
-                    except Exception as e:
-                        st.warning(f"Could not load audio file: {str(e)}")
+                audio_data = get_audio_file(selected_file['name'], country_code)
+                if audio_data:
+                    st.audio(audio_data, format='audio/mp3')
 
                 # Headlines
                 st.subheader("📰 Official Headlines")

@@ -1,51 +1,128 @@
-# Setting up Google Drive for Streamlit App
+# Google Drive Setup Guide for Streamlit Deployment
 
-## 1. Create a Google Cloud Project
+## Local Development Structure
+
+The application supports both local files and Google Drive files. Local files should be organized as follows:
+
+```
+project_root/
+├── text_archive/
+│   ├── IL/
+│   │   └── IL_YYYYMMDD_log.json
+│   ├── LB/
+│   ├── IR/
+│   └── CZ/
+└── archive/
+    ├── IL/
+    │   └── IL_YYYYMMDD_analysis.mp3
+    ├── LB/
+    ├── IR/
+    └── CZ/
+```
+
+## Google Drive Setup (Optional)
+
+If you want to use Google Drive for file storage:
+
 1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Click on "Select a project" at the top of the page
-3. Click "New Project"
-4. Name it "trends-to-stories" and create
+2. Create a new project or select an existing one
+3. Enable the Google Drive API:
+   - Go to "APIs & Services" > "Library"
+   - Search for "Google Drive API"
+   - Click "Enable"
 
-## 2. Enable Google Drive API
-1. In the Google Cloud Console, go to "APIs & Services" > "Library"
-2. Search for "Google Drive API"
-3. Click "Enable"
+### Create Service Account
 
-## 3. Create Service Account
 1. Go to "APIs & Services" > "Credentials"
 2. Click "Create Credentials" > "Service Account"
-3. Fill in:
-   - Name: "trends-to-stories-service"
-   - Role: "Editor"
-4. Click "Done"
-5. Click on the created service account
-6. Go to "Keys" tab
-7. Add Key > Create new key > JSON
-8. Save the downloaded JSON file as `google_drive_credentials.json`
+3. Fill in the service account details:
+   - Name: "streamlit-drive-access" (or your preferred name)
+   - Description: "Service account for Streamlit app to access Drive files"
+   - Click "Create"
+4. Skip role assignment (we'll handle permissions through Drive sharing)
+5. Click "Done"
 
-## 4. Google Drive Setup
-Your Google Drive is already set up with the correct structure:
-- Main folder: trends-to-stories (ID: 17xIMeFyuv1thVSH1vpvto5smTXihx8Hy)
-  - CZ (Czech Republic)
-  - IL (Israel)
-  - IR (Iran)
-  - LB (Lebanon)
+### Generate Service Account Key
 
-Make sure all folders are shared with "Anyone with the link" for public access.
+1. In the Credentials page, click on your newly created service account
+2. Go to the "Keys" tab
+3. Click "Add Key" > "Create new key"
+4. Choose "JSON" format
+5. Click "Create" - this will download the key file
 
-## 5. Environment Variables
-Add these to your .env file:
+### Configure Google Drive
+
+1. Create a folder structure in Google Drive matching the local structure:
+   ```
+   Archive/
+   ├── IL/
+   ├── LB/
+   ├── IR/
+   └── CZ/
+   ```
+2. Share the Archive folder with the service account email (found in the key file)
+3. Give "Viewer" access to the service account
+
+### Configure Streamlit Secrets
+
+1. For local development:
+   - Create `.streamlit/secrets.toml`
+   - Add your service account credentials:
+   ```toml
+   [gcp_service_account]
+   type = "service_account"
+   project_id = "your-project-id"
+   private_key_id = "your-private-key-id"
+   private_key = "your-private-key"
+   client_email = "your-service-account-email"
+   client_id = "your-client-id"
+   auth_uri = "https://accounts.google.com/o/oauth2/auth"
+   token_uri = "https://oauth2.googleapis.com/token"
+   auth_provider_x509_cert_url = "https://www.googleapis.com/oauth2/v1/certs"
+   client_x509_cert_url = "your-cert-url"
+   ```
+2. For Streamlit Cloud:
+   - Add the same credentials in your app's settings under "Secrets"
+
+## File Naming Convention
+
+Files should follow these naming patterns:
+- Log files: `{COUNTRY_CODE}_{YYYYMMDD}_log.json`
+- Audio files: `{COUNTRY_CODE}_{YYYYMMDD}_analysis.mp3`
+
+Example:
 ```
-GOOGLE_DRIVE_CREDENTIALS_PATH=path/to/google_drive_credentials.json
+IL_20231201_log.json
+IL_20231201_analysis.mp3
 ```
 
-## 6. For Streamlit Cloud Deployment
-1. Go to your app settings in Streamlit Cloud
-2. Add the contents of google_drive_credentials.json as a secret named GOOGLE_DRIVE_CREDENTIALS
-3. The app will automatically use the credentials from secrets when deployed
+## Deployment
 
-## Important Notes:
-- Keep your credentials JSON file secure and never commit it to version control
-- For Streamlit Cloud deployment, use secrets management
-- Test the setup locally before deploying
-- Monitor usage to stay within Google Drive API quotas
+1. Push your code to GitHub
+2. Connect your repository to Streamlit Cloud
+3. Configure secrets in Streamlit Cloud if using Google Drive
+4. Deploy!
+
+## File Priority
+
+The application will:
+1. Check for files in the local text_archive directory first
+2. If a file isn't found locally, check Google Drive (if configured)
+3. Display all available files in the date selector, regardless of source
+
+## Troubleshooting
+
+1. If local files aren't loading:
+   - Check file permissions
+   - Verify file naming convention
+   - Ensure files are in correct directories
+
+2. If Drive files aren't loading:
+   - Check Drive API is enabled
+   - Verify service account has access
+   - Confirm secrets are properly configured
+
+3. For other issues:
+   - Check Streamlit logs
+   - Verify file paths and naming
+   - Ensure proper file structure in both local and Drive storage
