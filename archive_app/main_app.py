@@ -28,11 +28,11 @@ def get_country_files(country_code):
     """Get list of log files and their corresponding MP3s"""
     try:
         # Get JSON files from text_archive inside archive
-        json_path = os.path.join('..', 'archive', 'text_archive', country_code)
+        json_path = os.path.join( 'archive', 'text_archive', country_code)
         json_files = [f for f in os.listdir(json_path) if f.endswith('_log.json')]
         
         # Get MP3 files from archive
-        mp3_path = os.path.join('..', 'archive', country_code)
+        mp3_path = os.path.join('archive', country_code)
         mp3_files = [f for f in os.listdir(mp3_path) if f.endswith('_analysis.mp3')]
         
         # Get all unique dates
