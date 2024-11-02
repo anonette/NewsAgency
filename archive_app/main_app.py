@@ -50,12 +50,20 @@ def get_country_files(service, country_code):
         # Get JSON files from text_archive folder
         text_folder_id = st.secrets["folder_ids"]["text_archive"]
         json_query = f"'{text_folder_id}' in parents and name contains '{country_code}' and name contains '_log.json' and trashed = false"
+        
+        # Debugging: Print the query and folder ID
+        st.write(f"Debug: JSON Query - {json_query}")
+        st.write(f"Debug: Text Folder ID - {text_folder_id}")
+        
         json_results = service.files().list(
             q=json_query,
             spaces='drive',
             fields='files(id, name)'
         ).execute()
         json_files = json_results.get('files', [])
+        
+        # Debugging: Print the retrieved JSON files
+        st.write(f"Debug: Retrieved JSON Files - {json_files}")
         
         # Get MP3 files from country folder
         country_folder_id = st.secrets["folder_ids"][country_code]
