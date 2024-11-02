@@ -2,6 +2,11 @@ import streamlit as st
 import os
 import json
 from datetime import datetime
+import requests
+
+# Base paths - support both local and server paths
+TEXT_ARCHIVE_PATH = os.path.join('..', 'text_archive')
+AUDIO_SERVER_URL = "http://localhost:8000"  # This will be your deployment server URL
 
 COUNTRIES = {
     "IL": ("Israel", "🇮🇱"),
@@ -13,7 +18,7 @@ COUNTRIES = {
 def get_country_files(country_code):
     """Get list of log files for a country"""
     try:
-        path = os.path.join('text_archive', country_code)
+        path = os.path.join(TEXT_ARCHIVE_PATH, country_code)
         files = [f for f in os.listdir(path) if f.endswith('_log.json')]
         # Verify each file is valid JSON before including it
         valid_files = []
@@ -33,7 +38,7 @@ def get_country_files(country_code):
 def load_json_data(country_code, filename):
     """Load JSON data from a log file"""
     try:
-        path = os.path.join('text_archive', country_code, filename)
+        path = os.path.join(TEXT_ARCHIVE_PATH, country_code, filename)
         with open(path, 'r', encoding='utf-8') as f:
             data = json.load(f)
             # Verify required fields exist
@@ -43,6 +48,27 @@ def load_json_data(country_code, filename):
     except Exception as e:
         st.error(f"Error loading data: {str(e)}")
         return None
+
+def get_audio_file(country_code, log_filename):
+    """Get audio file from server"""
+    try:
+        audio_filename = log_filename.replace('_log.json', '_analysis.mp3')
+        audio_url = f"{AUDIO_SERVER_URL}/archive/{country_code}/{audio_filename}"
+        
+        # Try local file first (for development)
+        local_path = os.path.join('..', 'archive', country_code, audio_filename)
+        if os.path.exists(local_path):
+            with open(local_path, 'rb') as f:
+                return f.read()
+        
+        # If local file doesn't exist or we're deployed, try server
+        response = requests.get(audio_url)
+        if response.status_code == 200:
+            return response.content
+            
+    except Exception as e:
+        st.warning(f"Could not load audio file: {str(e)}")
+    return None
 
 def format_date(filename):
     """Format date from filename"""
@@ -206,14 +232,9 @@ def main():
             if data:
                 with st.container():
                     # Audio player
-                    audio_filename = selected_file.replace('_log.json', '_analysis.mp3')
-                    audio_path = os.path.join('archive', country_code, audio_filename)
-                    if os.path.exists(audio_path):
-                        try:
-                            with open(audio_path, 'rb') as f:
-                                st.audio(f.read(), format='audio/mp3')
-                        except Exception as e:
-                            st.warning(f"Could not load audio file: {str(e)}")
+                    audio_data = get_audio_file(country_code, selected_file)
+                    if audio_data:
+                        st.audio(audio_data, format='audio/mp3')
 
                     # Headlines
                     st.subheader("📰 Official Headlines")
