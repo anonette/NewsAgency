@@ -4,9 +4,8 @@ import json
 from datetime import datetime
 import requests
 
-# Base paths - support both local and server paths
-TEXT_ARCHIVE_PATH = os.path.join('..', 'text_archive')
-AUDIO_SERVER_URL = "http://localhost:8000"  # This will be your deployment server URL
+# Server URL - change this for deployment
+SERVER_URL = "http://localhost:8000"
 
 COUNTRIES = {
     "IL": ("Israel", "🇮🇱"),
@@ -16,35 +15,50 @@ COUNTRIES = {
 }
 
 def get_country_files(country_code):
-    """Get list of log files for a country"""
+    """Get list of log files for a country from server"""
     try:
-        path = os.path.join(TEXT_ARCHIVE_PATH, country_code)
-        files = [f for f in os.listdir(path) if f.endswith('_log.json')]
-        # Verify each file is valid JSON before including it
-        valid_files = []
-        for f in files:
-            try:
-                with open(os.path.join(path, f), 'r', encoding='utf-8') as file:
-                    json.load(file)
-                valid_files.append(f)
-            except:
-                continue
-        valid_files.sort(reverse=True)
-        return valid_files
+        # Try local path first (for development)
+        local_path = os.path.join('..', 'text_archive', country_code)
+        if os.path.exists(local_path):
+            files = [f for f in os.listdir(local_path) if f.endswith('_log.json')]
+            files.sort(reverse=True)
+            return files
+        
+        # If local path doesn't exist or we're deployed, use server
+        url = f"{SERVER_URL}/list/{country_code}"
+        response = requests.get(url)
+        if response.status_code == 200:
+            return response.json()
+        else:
+            st.error(f"Error getting file list from server: {response.status_code}")
+            return []
     except Exception as e:
         st.error(f"Error listing files: {str(e)}")
         return []
 
 def load_json_data(country_code, filename):
-    """Load JSON data from a log file"""
+    """Load JSON data from server"""
     try:
-        path = os.path.join(TEXT_ARCHIVE_PATH, country_code, filename)
-        with open(path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-            # Verify required fields exist
+        # Try local path first (for development)
+        local_path = os.path.join('..', 'text_archive', country_code, filename)
+        if os.path.exists(local_path):
+            with open(local_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                if not all(key in data for key in ['headlines', 'trends']):
+                    raise ValueError("Missing required fields in JSON data")
+                return data
+        
+        # If local path doesn't exist or we're deployed, use server
+        url = f"{SERVER_URL}/text_archive/{country_code}/{filename}"
+        response = requests.get(url)
+        if response.status_code == 200:
+            data = response.json()
             if not all(key in data for key in ['headlines', 'trends']):
                 raise ValueError("Missing required fields in JSON data")
             return data
+        else:
+            st.error(f"Error loading data from server: {response.status_code}")
+            return None
     except Exception as e:
         st.error(f"Error loading data: {str(e)}")
         return None
@@ -53,22 +67,22 @@ def get_audio_file(country_code, log_filename):
     """Get audio file from server"""
     try:
         audio_filename = log_filename.replace('_log.json', '_analysis.mp3')
-        audio_url = f"{AUDIO_SERVER_URL}/archive/{country_code}/{audio_filename}"
         
-        # Try local file first (for development)
+        # Try local path first (for development)
         local_path = os.path.join('..', 'archive', country_code, audio_filename)
         if os.path.exists(local_path):
             with open(local_path, 'rb') as f:
                 return f.read()
         
-        # If local file doesn't exist or we're deployed, try server
-        response = requests.get(audio_url)
+        # If local path doesn't exist or we're deployed, use server
+        url = f"{SERVER_URL}/archive/{country_code}/{audio_filename}"
+        response = requests.get(url)
         if response.status_code == 200:
             return response.content
-            
+        return None
     except Exception as e:
         st.warning(f"Could not load audio file: {str(e)}")
-    return None
+        return None
 
 def format_date(filename):
     """Format date from filename"""
