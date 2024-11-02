@@ -79,6 +79,9 @@ def load_json_data(country_code, file_pair):
             return None
             
         json_path = os.path.join('..', 'archive', 'text_archive', country_code, file_pair['json'])
+        abs_json_path = os.path.abspath(json_path)
+        print(f"Loading JSON from: {abs_json_path}")
+            
         with open(json_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
             if not all(key in data for key in ['headlines', 'trends']):
@@ -95,6 +98,9 @@ def get_audio_file(country_code, file_pair):
             return None
             
         mp3_path = os.path.join('..', 'archive', country_code, file_pair['mp3'])
+        abs_mp3_path = os.path.abspath(mp3_path)
+        print(f"Loading MP3 from: {abs_mp3_path}")
+            
         with open(mp3_path, 'rb') as f:
             return f.read()
     except Exception as e:
