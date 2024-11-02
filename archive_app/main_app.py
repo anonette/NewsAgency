@@ -48,7 +48,7 @@ def get_country_files(service, country_code):
     """Get list of log files and their corresponding MP3s"""
     try:
         # Get JSON files from text_archive folder
-        text_folder_id = st.secrets["folder_ids"]["text_archive"][country_code]
+        text_folder_id = st.secrets["folder_ids"]["text_archive"]
         json_query = f"'{text_folder_id}' in parents and name contains '{country_code}' and name contains '_log.json' and trashed = false"
         json_results = service.files().list(
             q=json_query,
