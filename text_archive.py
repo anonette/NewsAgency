@@ -4,11 +4,14 @@ import json
 from datetime import datetime
 import glob
 
-# Create archive directory structure if it doesn't exist
-TEXT_ARCHIVE_DIR = "archive/text_archive"
+# Get the absolute path to the archive directory
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(SCRIPT_DIR)  # Go up one level to project root
+TEXT_ARCHIVE_DIR = os.path.join(BASE_DIR, "archive", "text_archive")
+
 COUNTRIES = {
     "IL": "Israel",
-    "LB": "Lebanon",  # Changed from 'LE' to 'LB' to match lebanon_trends.py
+    "LB": "Lebanon",
     "IR": "Iran"
 }
 
