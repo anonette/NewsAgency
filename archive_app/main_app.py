@@ -47,8 +47,8 @@ def get_base_filename(filename):
 def get_country_files(service, country_code):
     """Get list of log files and their corresponding MP3s"""
     try:
-        # Get JSON files from text_archive folder
-        text_folder_id = st.secrets["folder_ids"][country_code]
+        # Get JSON files from text_archive folder and its subfolders
+        text_folder_id = st.secrets["folder_ids"]
         json_query = f"'{text_folder_id}' in parents and name contains '{country_code}' and name contains '_log.json' and trashed = false"
         
         # Debugging: Print the query and folder ID
@@ -58,9 +58,28 @@ def get_country_files(service, country_code):
         json_results = service.files().list(
             q=json_query,
             spaces='drive',
-            fields='files(id, name)'
+            fields='files(id, name, parents)'
         ).execute()
         json_files = json_results.get('files', [])
+        
+        # Search in subfolders
+        subfolders_query = f"'{text_folder_id}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
+        subfolders_results = service.files().list(
+            q=subfolders_query,
+            spaces='drive',
+            fields='files(id, name)'
+        ).execute()
+        subfolders = subfolders_results.get('files', [])
+        
+        for subfolder in subfolders:
+            subfolder_id = subfolder['id']
+            subfolder_json_query = f"'{subfolder_id}' in parents and name contains '{country_code}' and name contains '_log.json' and trashed = false"
+            subfolder_json_results = service.files().list(
+                q=subfolder_json_query,
+                spaces='drive',
+                fields='files(id, name)'
+            ).execute()
+            json_files.extend(subfolder_json_results.get('files', []))
         
         # Debugging: Print the retrieved JSON files
         st.write(f"Debug: Retrieved JSON Files - {json_files}")
