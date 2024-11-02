@@ -5,7 +5,7 @@ from datetime import datetime
 import glob
 
 # Create archive directory structure if it doesn't exist
-TEXT_ARCHIVE_DIR = "text_archive"
+TEXT_ARCHIVE_DIR = "archive/text_archive"
 COUNTRIES = {
     "IL": "Israel",
     "LB": "Lebanon",  # Changed from 'LE' to 'LB' to match lebanon_trends.py
