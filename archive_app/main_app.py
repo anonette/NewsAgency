@@ -44,9 +44,23 @@ def get_base_filename(filename):
 def get_country_files(service, country_code):
     """Get list of log files and their corresponding MP3s"""
     try:
-        # Get JSON files from country folder
-        country_folder_id = st.secrets["folder_ids"][country_code]
-        json_query = f"'{country_folder_id}' in parents and name contains '_log.json' and trashed = false"
+        # First, get the country subfolder in text_archive
+        text_archive_id = st.secrets["folder_ids"]["text_archive"]
+        subfolder_query = f"'{text_archive_id}' in parents and name = '{country_code}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
+        subfolder_results = service.files().list(
+            q=subfolder_query,
+            spaces='drive',
+            fields='files(id, name)'
+        ).execute()
+        
+        if not subfolder_results.get('files'):
+            st.error(f"Could not find text archive subfolder for {country_code}")
+            return []
+            
+        country_text_folder_id = subfolder_results['files'][0]['id']
+        
+        # Get JSON files from country subfolder in text_archive
+        json_query = f"'{country_text_folder_id}' in parents and name contains '_log.json' and trashed = false"
         json_results = service.files().list(
             q=json_query,
             spaces='drive',
@@ -55,6 +69,7 @@ def get_country_files(service, country_code):
         json_files = json_results.get('files', [])
         
         # Get MP3 files from country folder
+        country_folder_id = st.secrets["folder_ids"][country_code]
         mp3_query = f"'{country_folder_id}' in parents and name contains '_analysis.mp3' and trashed = false"
         mp3_results = service.files().list(
             q=mp3_query,
