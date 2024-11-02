@@ -7,3 +7,4 @@ __pycache__/
 text_archive/
 archive/archive_data.json
 venv/
+archive_app/.streamlit/secrets.toml

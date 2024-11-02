@@ -1,7 +1,11 @@
 import streamlit as st
 import json
-import os
 from datetime import datetime
+import requests
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseDownload
+import io
 
 COUNTRIES = {
     "IL": ("Israel", "🇮🇱"),
@@ -10,50 +14,59 @@ COUNTRIES = {
     "CZ": ("Czech Republic (control)", "🇨🇿")
 }
 
-def get_country_files(country_code):
-    """Get list of log files for a country"""
+# Initialize Google Drive service
+@st.cache_resource
+def get_drive_service():
     try:
-        # Check if we're running on Streamlit Cloud
-        if os.getenv('STREAMLIT_DEPLOYMENT'):
-            # Use Google Drive path for cloud deployment
-            path = os.path.join('text_archive', country_code)
-        else:
-            # Use local path for development
-            path = os.path.join('text_archive', country_code)
-            
-        files = [f for f in os.listdir(path) if f.endswith('_log.json')]
-        # Verify each file is valid JSON before including it
-        valid_files = []
-        for f in files:
-            try:
-                with open(os.path.join(path, f), 'r', encoding='utf-8') as file:
-                    json.load(file)
-                valid_files.append(f)
-            except:
-                continue
-        valid_files.sort(reverse=True)
-        return valid_files
+        # Get the folder ID from secrets
+        folder_id = st.secrets["folder_ids"]["text_archive"]
+        
+        credentials = service_account.Credentials.from_service_account_info(
+            st.secrets["gcp_service_account"],
+            scopes=['https://www.googleapis.com/auth/drive.readonly']
+        )
+        return build('drive', 'v3', credentials=credentials)
     except Exception as e:
-        st.error(f"Error accessing files: {str(e)}")
+        st.error(f"Failed to initialize Drive service: {str(e)}")
+        return None
+
+def get_country_files(service, country_code):
+    """Get list of log files for a country from Google Drive"""
+    try:
+        folder_id = st.secrets["folder_ids"]["text_archive"]
+        
+        # Search for files in the country folder
+        query = f"'{folder_id}' in parents and name contains '{country_code}' and name contains '_log.json' and trashed = false"
+        results = service.files().list(
+            q=query,
+            spaces='drive',
+            fields='files(id, name)'
+        ).execute()
+        
+        files = results.get('files', [])
+        files.sort(key=lambda x: x['name'], reverse=True)
+        return files
+    except Exception as e:
+        st.error(f"Error listing files: {str(e)}")
         return []
 
-def load_json_data(country_code, filename):
-    """Load JSON data from a log file"""
+def load_json_data(service, file_id):
+    """Load JSON data from Drive file"""
     try:
-        # Check if we're running on Streamlit Cloud
-        if os.getenv('STREAMLIT_DEPLOYMENT'):
-            # Use Google Drive path for cloud deployment
-            path = os.path.join('text_archive', country_code, filename)
-        else:
-            # Use local path for development
-            path = os.path.join('text_archive', country_code, filename)
-            
-        with open(path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-            # Verify required fields exist
-            if not all(key in data for key in ['headlines', 'trends']):
-                raise ValueError("Missing required fields in JSON data")
-            return data
+        request = service.files().get_media(fileId=file_id)
+        file = io.BytesIO()
+        downloader = MediaIoBaseDownload(file, request)
+        done = False
+        while done is False:
+            status, done = downloader.next_chunk()
+        
+        file.seek(0)
+        data = json.loads(file.read().decode())
+        
+        # Verify required fields exist
+        if not all(key in data for key in ['headlines', 'trends']):
+            raise ValueError("Missing required fields in JSON data")
+        return data
     except Exception as e:
         st.error(f"Error loading data: {str(e)}")
         return None
@@ -69,6 +82,35 @@ def format_date(filename):
         return date.strftime('%A, %B %d, %Y')
     except:
         return filename
+
+def get_audio_file(service, log_file_name, country_code):
+    """Get audio file from Drive"""
+    try:
+        folder_id = st.secrets["folder_ids"][country_code]
+        audio_filename = log_file_name.replace('_log.json', '_analysis.mp3')
+        
+        # Search for the audio file
+        query = f"'{folder_id}' in parents and name = '{audio_filename}' and trashed = false"
+        results = service.files().list(
+            q=query,
+            spaces='drive',
+            fields='files(id)'
+        ).execute()
+        
+        files = results.get('files', [])
+        if files:
+            request = service.files().get_media(fileId=files[0]['id'])
+            audio_file = io.BytesIO()
+            downloader = MediaIoBaseDownload(audio_file, request)
+            done = False
+            while done is False:
+                status, done = downloader.next_chunk()
+            audio_file.seek(0)
+            return audio_file.read()
+        return None
+    except Exception as e:
+        st.warning(f"Could not load audio: {str(e)}")
+        return None
 
 st.set_page_config(
     page_title="Middle East Pulse News Agency",
@@ -165,6 +207,12 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# Initialize Drive service
+drive_service = get_drive_service()
+if not drive_service:
+    st.error("Failed to initialize Google Drive service")
+    st.stop()
+
 # Title, subtitle, and description
 st.markdown('<h1 class="main-title">Middle East Pulse News Agency:<br>Nostalgia for Real Data in a Synthetic World</h1>', unsafe_allow_html=True)
 st.markdown('<p class="description">Capturing the last traces of authentic human searches through Google Trends, this project contrasts official narratives with genuine public sentiment—a glimpse into the "real" in an era of synthetic media.</p>', unsafe_allow_html=True)
@@ -201,7 +249,7 @@ else:
     st.header(f"{country_flag} {country_name}")
 
     # Get available files
-    files = get_country_files(country_code)
+    files = get_country_files(drive_service, country_code)
     if not files:
         st.warning("No analysis files available")
         st.stop()
@@ -210,23 +258,18 @@ else:
     selected_file = st.selectbox(
         "Select Date:",
         files,
-        format_func=format_date
+        format_func=lambda x: format_date(x['name'])
     )
 
     if selected_file:
         # Load and display data
-        data = load_json_data(country_code, selected_file)
+        data = load_json_data(drive_service, selected_file['id'])
         if data:
             with st.container():
                 # Audio player
-                audio_filename = selected_file.replace('_log.json', '_analysis.mp3')
-                audio_path = os.path.join('archive', country_code, audio_filename)
-                if os.path.exists(audio_path):
-                    try:
-                        with open(audio_path, 'rb') as f:
-                            st.audio(f.read(), format='audio/mp3')
-                    except Exception as e:
-                        st.warning(f"Could not load audio file: {str(e)}")
+                audio_data = get_audio_file(drive_service, selected_file['name'], country_code)
+                if audio_data:
+                    st.audio(audio_data, format='audio/mp3')
 
                 # Headlines
                 st.subheader("📰 Official Headlines")
