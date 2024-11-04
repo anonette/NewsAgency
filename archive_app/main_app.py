@@ -1,11 +1,9 @@
 import streamlit as st
-import os
 import json
 from datetime import datetime
-from google.oauth2 import service_account
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseDownload
-import io
+import requests
+from bs4 import BeautifulSoup
+import re
 
 # Configuration and setup
 st.set_page_config(
@@ -21,145 +19,127 @@ COUNTRIES = {
     "CZ": ("Czech Republic (control)", "🇨🇿")
 }
 
-# Initialize Google Drive service
-@st.cache_resource
-def get_drive_service():
-    try:
-        credentials = service_account.Credentials.from_service_account_info(
-            st.secrets["gcp_service_account"],
-            scopes=['https://www.googleapis.com/auth/drive.readonly']
-        )
-        return build('drive', 'v3', credentials=credentials)
-    except Exception as e:
-        st.error(f"Failed to initialize Drive service: {str(e)}")
-        return None
+# Base URL where files are hosted
+base_url = "http://95.216.199.241:8080/"
 
-def get_base_filename(filename):
-    """Get base filename without timestamp"""
-    parts = filename.split('_')
-    if len(parts) >= 2:
-        return f"{parts[0]}_{parts[1]}"  # Return country_date part
-    return filename
-
-def get_country_files(service, country_code):
-    """Get list of log files and their corresponding MP3s"""
-    try:
-        # First, get the country subfolder in text_archive
-        text_archive_id = st.secrets["folder_ids"]["text_archive"]
-        subfolder_query = f"'{text_archive_id}' in parents and name = '{country_code}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
-        subfolder_results = service.files().list(
-            q=subfolder_query,
-            spaces='drive',
-            fields='files(id, name)'
-        ).execute()
-        
-        if not subfolder_results.get('files'):
-            st.error(f"Could not find text archive subfolder for {country_code}")
-            return []
-            
-        country_text_folder_id = subfolder_results['files'][0]['id']
-        
-        # Get JSON files from country subfolder in text_archive
-        json_query = f"'{country_text_folder_id}' in parents and name contains '_log.json' and trashed = false"
-        json_results = service.files().list(
-            q=json_query,
-            spaces='drive',
-            fields='files(id, name)'
-        ).execute()
-        json_files = json_results.get('files', [])
-        
-        # Get MP3 files from country folder
-        country_folder_id = st.secrets["folder_ids"][country_code]
-        mp3_query = f"'{country_folder_id}' in parents and name contains '_analysis.mp3' and trashed = false"
-        mp3_results = service.files().list(
-            q=mp3_query,
-            spaces='drive',
-            fields='files(id, name)'
-        ).execute()
-        mp3_files = mp3_results.get('files', [])
-        
-        # Get all unique dates
-        dates = set()
-        for f in json_files + mp3_files:
-            base_name = get_base_filename(f['name'])
-            date_str = base_name.split('_')[1]
-            dates.add(date_str)
-        
-        # Create file pairs for all dates
-        file_pairs = []
-        for date_str in dates:
-            # Find matching files
-            json_match = None
-            mp3_match = None
-            
-            # Look for JSON file
-            for f in json_files:
-                if get_base_filename(f['name']).split('_')[1] == date_str:
-                    json_match = f
-                    break
-            
-            # Look for MP3 file
-            for f in mp3_files:
-                if get_base_filename(f['name']).split('_')[1] == date_str:
-                    mp3_match = f
-                    break
-            
-            file_pairs.append({
-                'date': date_str,
-                'json': json_match,
-                'mp3': mp3_match
-            })
-        
-        return sorted(file_pairs, key=lambda x: x['date'], reverse=True)
-    except Exception as e:
-        st.error(f"Error accessing files: {str(e)}")
+def fetch_directories():
+    """Fetch available country directories"""
+    response = requests.get(base_url)
+    if response.status_code == 200:
+        soup = BeautifulSoup(response.text, 'html.parser')
+        return [link.get('href') for link in soup.find_all('a') if link.get('href').endswith('/') and link.get('href') != '../']
+    else:
+        st.error(f"Could not fetch directories. Server returned status: {response.status_code}")
         return []
 
-def load_json_data(service, file_pair):
-    """Load JSON data from Drive file"""
+def fetch_files(subfolder=""):
+    """Fetch files from a specific country directory"""
+    # Fetch MP3 files from country directory
+    url = base_url + subfolder
+    # st.write(f"DEBUG: Fetching MP3 files from URL: {url}")
+    
+    # Fetch JSON files from text_archive directory
+    json_url = base_url + "text_archive/" + subfolder
+    # st.write(f"DEBUG: Fetching JSON files from URL: {json_url}")
+    
+    mp3_files = []
+    json_files = []
+    
+    # Get MP3 files
+    response = requests.get(url)
+    if response.status_code == 200:
+        soup = BeautifulSoup(response.text, 'html.parser')
+        mp3_files = [link.get('href') for link in soup.find_all('a') 
+                    if not link.get('href').endswith('/') 
+                    and not link.get('href').endswith('.ini')
+                    and link.get('href').endswith('.mp3')]
+    
+    # Get JSON files
+    response = requests.get(json_url)
+    if response.status_code == 200:
+        soup = BeautifulSoup(response.text, 'html.parser')
+        json_files = [link.get('href') for link in soup.find_all('a') 
+                     if not link.get('href').endswith('/') 
+                     and link.get('href').endswith('.json')]
+    
+    # st.write(f"DEBUG: Found {len(mp3_files)} MP3 files: {mp3_files}")
+    # st.write(f"DEBUG: Found {len(json_files)} JSON files: {json_files}")
+    
+    # Group files by date
+    file_pairs = []
+    dates = set()
+    
+    # Extract dates using regex to handle timestamps
+    date_pattern = re.compile(r'_(\d{8})_\d{6}_')
+    
+    # Get dates from both MP3 and JSON files
+    for file in mp3_files + json_files:
+        match = date_pattern.search(file)
+        if match:
+            date_str = match.group(1)
+            dates.add(date_str)
+            # st.write(f"DEBUG: Extracted date {date_str} from {file}")
+    
+    # st.write(f"DEBUG: Extracted dates: {dates}")
+    
+    for date_str in dates:
+        # Use regex to find files for this date
+        json_pattern = re.compile(f'_{date_str}_\\d{{6}}_log\\.json$')
+        mp3_pattern = re.compile(f'_{date_str}_\\d{{6}}_analysis\\.mp3$')
+        
+        json_matches = [f for f in json_files if json_pattern.search(f)]
+        mp3_matches = [f for f in mp3_files if mp3_pattern.search(f)]
+        
+        # Sort by timestamp to get latest version
+        json_match = sorted(json_matches)[-1] if json_matches else None
+        mp3_match = sorted(mp3_matches)[-1] if mp3_matches else None
+        
+        # st.write(f"DEBUG: For date {date_str}:")
+        # st.write(f"DEBUG: JSON matches: {json_matches}")
+        # st.write(f"DEBUG: MP3 matches: {mp3_matches}")
+        # st.write(f"DEBUG: Selected JSON: {json_match}")
+        # st.write(f"DEBUG: Selected MP3: {mp3_match}")
+        
+        file_pairs.append({
+            'date': date_str,
+            'json': json_match,
+            'mp3': mp3_match
+        })
+    
+    return sorted(file_pairs, key=lambda x: x['date'], reverse=True)
+
+def load_json_data(subfolder, json_file):
+    """Load JSON data from file"""
     try:
-        if not file_pair['json']:
+        if not json_file:
+            # st.write("DEBUG: No JSON file provided")
             return None
             
-        request = service.files().get_media(fileId=file_pair['json']['id'])
-        file = io.BytesIO()
-        downloader = MediaIoBaseDownload(file, request)
-        done = False
-        while done is False:
-            status, done = downloader.next_chunk()
+        # JSON files are in text_archive directory
+        url = base_url + "text_archive/" + subfolder + json_file
+        # st.write(f"DEBUG: Loading JSON from URL: {url}")
         
-        file.seek(0)
-        data = json.loads(file.read().decode())
+        response = requests.get(url)
+        # st.write(f"DEBUG: JSON response status: {response.status_code}")
         
-        if not all(key in data for key in ['headlines', 'trends']):
-            raise ValueError("Missing required fields in JSON data")
-        return data
+        if response.status_code == 200:
+            data = response.json()
+            # st.write(f"DEBUG: JSON keys present: {list(data.keys())}")
+            if not all(key in data for key in ['headlines', 'trends']):
+                raise ValueError("Missing required fields in JSON data")
+            return data
+        return None
     except Exception as e:
         st.error(f"Error loading data: {str(e)}")
-        return None
-
-def get_audio_file(service, file_pair):
-    """Get audio file from Drive"""
-    try:
-        if not file_pair['mp3']:
-            return None
-            
-        request = service.files().get_media(fileId=file_pair['mp3']['id'])
-        audio_file = io.BytesIO()
-        downloader = MediaIoBaseDownload(audio_file, request)
-        done = False
-        while done is False:
-            status, done = downloader.next_chunk()
-        audio_file.seek(0)
-        return audio_file.read()
-    except Exception as e:
-        st.warning(f"Could not load audio: {str(e)}")
+        st.write(f"DEBUG: Exception details: {type(e).__name__}: {str(e)}")
         return None
 
 def format_date(file_pair):
     """Format date from filename"""
     try:
         date_str = file_pair['date']
+        # st.write(f"DEBUG: Formatting date string: {date_str}")
+        
         date = datetime.strptime(date_str, '%Y%m%d')
         formatted = date.strftime('%A, %B %d, %Y')
         
@@ -170,11 +150,15 @@ def format_date(file_pair):
         if not file_pair['mp3']:
             status.append("No Audio")
             
+        # st.write(f"DEBUG: File status - JSON: {'Present' if file_pair['json'] else 'Missing'}, MP3: {'Present' if file_pair['mp3'] else 'Missing'}")
+        
         if status:
             formatted += f" ({', '.join(status)})"
             
+        # st.write(f"DEBUG: Final formatted date: {formatted}")
         return formatted
-    except:
+    except ValueError as e:
+        st.write(f"DEBUG: Date formatting error: {str(e)}")
         return file_pair['date']
 
 # Add custom CSS
@@ -224,12 +208,6 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Initialize Drive service
-drive_service = get_drive_service()
-if not drive_service:
-    st.error("Failed to initialize Google Drive service")
-    st.stop()
-
 # Title and description
 st.markdown('<h1 class="main-title">Middle East Pulse News Agency:<br>Nostalgia for Real Data in a Synthetic World</h1>', unsafe_allow_html=True)
 st.markdown('<p class="description">Capturing the last traces of authentic human searches through Google Trends, this project contrasts official narratives with genuine public sentiment—a glimpse into the "real" in an era of synthetic media.</p>', unsafe_allow_html=True)
@@ -266,7 +244,7 @@ else:
     st.header(f"{country_flag} {country_name}")
 
     # Get available files
-    files = get_country_files(drive_service, country_code)
+    files = fetch_files(f"{country_code}/")
     if not files:
         st.warning("No analysis files available")
         st.stop()
@@ -280,13 +258,13 @@ else:
 
     if selected_file:
         # Load and display data
-        data = load_json_data(drive_service, selected_file)
+        data = load_json_data(f"{country_code}/", selected_file['json'])
         if data:
             with st.container():
                 # Audio player
-                audio_data = get_audio_file(drive_service, selected_file)
-                if audio_data:
-                    st.audio(audio_data, format='audio/mp3')
+                if selected_file['mp3']:
+                    audio_url = base_url + country_code + "/" + selected_file['mp3']
+                    st.audio(audio_url, format='audio/mp3')
 
                 # Headlines
                 st.subheader("📰 Official Headlines")
@@ -307,6 +285,5 @@ else:
         else:
             st.info("No data available for this date")
             if selected_file['mp3']:
-                audio_data = get_audio_file(drive_service, selected_file)
-                if audio_data:
-                    st.audio(audio_data, format='audio/mp3')
+                audio_url = base_url + country_code + "/" + selected_file['mp3']
+                st.audio(audio_url, format='audio/mp3')
