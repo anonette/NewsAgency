@@ -20,7 +20,7 @@ COUNTRIES = {
 }
 
 # Base URL where files are hosted
-base_url = "http://95.216.199.241:8080/"
+base_url = "https://hetcer3r314a.zrok.yair.cc/"
 
 def fetch_directories():
     """Fetch available country directories"""
