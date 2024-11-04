@@ -5,9 +5,7 @@ from datetime import datetime
 import glob
 
 # Get the absolute path to the archive directory
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-BASE_DIR = os.path.dirname(SCRIPT_DIR)  # Go up one level to project root
-TEXT_ARCHIVE_DIR = os.path.join(BASE_DIR, "archive", "text_archive")
+TEXT_ARCHIVE_DIR = os.path.join("archive", "text_archive")
 
 COUNTRIES = {
     "IL": "Israel",

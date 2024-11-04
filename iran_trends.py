@@ -69,7 +69,7 @@ def generate_audio(text):
             
             # Generate filename with timestamp
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            audio_file = os.path.join(country_dir, f"IR_{timestamp}_analysis.mp3")
+            audio_file = os.path.join(country_dir, f"{COUNTRY_CONFIG['code']}_{timestamp}_analysis.mp3")
             with open(audio_file, "wb") as f:
                 f.write(response.content)
             print(f"Audio saved as: {audio_file}")
