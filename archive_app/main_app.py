@@ -36,11 +36,9 @@ def fetch_files(subfolder=""):
     """Fetch files from a specific country directory"""
     # Fetch MP3 files from country directory
     url = base_url + subfolder
-    # st.write(f"DEBUG: Fetching MP3 files from URL: {url}")
     
     # Fetch JSON files from text_archive directory
     json_url = base_url + "text_archive/" + subfolder
-    # st.write(f"DEBUG: Fetching JSON files from URL: {json_url}")
     
     mp3_files = []
     json_files = []
@@ -62,9 +60,6 @@ def fetch_files(subfolder=""):
                      if not link.get('href').endswith('/') 
                      and link.get('href').endswith('.json')]
     
-    # st.write(f"DEBUG: Found {len(mp3_files)} MP3 files: {mp3_files}")
-    # st.write(f"DEBUG: Found {len(json_files)} JSON files: {json_files}")
-    
     # Group files by date
     file_pairs = []
     dates = set()
@@ -78,9 +73,6 @@ def fetch_files(subfolder=""):
         if match:
             date_str = match.group(1)
             dates.add(date_str)
-            # st.write(f"DEBUG: Extracted date {date_str} from {file}")
-    
-    # st.write(f"DEBUG: Extracted dates: {dates}")
     
     for date_str in dates:
         # Use regex to find files for this date
@@ -94,12 +86,6 @@ def fetch_files(subfolder=""):
         json_match = sorted(json_matches)[-1] if json_matches else None
         mp3_match = sorted(mp3_matches)[-1] if mp3_matches else None
         
-        # st.write(f"DEBUG: For date {date_str}:")
-        # st.write(f"DEBUG: JSON matches: {json_matches}")
-        # st.write(f"DEBUG: MP3 matches: {mp3_matches}")
-        # st.write(f"DEBUG: Selected JSON: {json_match}")
-        # st.write(f"DEBUG: Selected MP3: {mp3_match}")
-        
         file_pairs.append({
             'date': date_str,
             'json': json_match,
@@ -112,34 +98,27 @@ def load_json_data(subfolder, json_file):
     """Load JSON data from file"""
     try:
         if not json_file:
-            # st.write("DEBUG: No JSON file provided")
             return None
             
         # JSON files are in text_archive directory
         url = base_url + "text_archive/" + subfolder + json_file
-        # st.write(f"DEBUG: Loading JSON from URL: {url}")
         
         response = requests.get(url)
-        # st.write(f"DEBUG: JSON response status: {response.status_code}")
         
         if response.status_code == 200:
             data = response.json()
-            # st.write(f"DEBUG: JSON keys present: {list(data.keys())}")
             if not all(key in data for key in ['headlines', 'trends']):
                 raise ValueError("Missing required fields in JSON data")
             return data
         return None
     except Exception as e:
         st.error(f"Error loading data: {str(e)}")
-        st.write(f"DEBUG: Exception details: {type(e).__name__}: {str(e)}")
         return None
 
 def format_date(file_pair):
     """Format date from filename"""
     try:
         date_str = file_pair['date']
-        # st.write(f"DEBUG: Formatting date string: {date_str}")
-        
         date = datetime.strptime(date_str, '%Y%m%d')
         formatted = date.strftime('%A, %B %d, %Y')
         
@@ -150,15 +129,11 @@ def format_date(file_pair):
         if not file_pair['mp3']:
             status.append("No Audio")
             
-        # st.write(f"DEBUG: File status - JSON: {'Present' if file_pair['json'] else 'Missing'}, MP3: {'Present' if file_pair['mp3'] else 'Missing'}")
-        
         if status:
             formatted += f" ({', '.join(status)})"
             
-        # st.write(f"DEBUG: Final formatted date: {formatted}")
         return formatted
-    except ValueError as e:
-        st.write(f"DEBUG: Date formatting error: {str(e)}")
+    except:
         return file_pair['date']
 
 # Add custom CSS
@@ -204,6 +179,29 @@ st.markdown("""
         height: 1px;
         background-color: #e0e0e0;
         margin: 2em 0;
+    }
+    .trend-container {
+        margin-bottom: 1em;
+        padding: 1em;
+        border-radius: 5px;
+        background-color: white;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .trend-title {
+        font-size: 1.1em;
+        font-weight: 500;
+        margin-bottom: 0.5em;
+    }
+    .related-searches {
+        margin-top: 0.5em;
+        margin-left: 1em;
+        color: #666;
+    }
+    .no-related {
+        color: #999;
+        font-style: italic;
+        font-size: 0.9em;
+        margin-left: 1em;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -273,10 +271,22 @@ else:
 
                 # Trends
                 st.subheader("🔍 Google Trends")
-                for trend in data.get('trends', []):
-                    with st.expander(trend.get('title', 'Untitled Trend'), expanded=True):
-                        for related in trend.get('related', []):
-                            st.markdown(f'<span class="related-search">{related}</span>', unsafe_allow_html=True)
+                trends = data.get('trends', [])
+                
+                # Display each trend in a container
+                for i, trend in enumerate(trends, 1):
+                    related_searches = trend.get('related', [])
+                    st.markdown(f"""
+                    <div class="trend-container">
+                        <div class="trend-title">{i}. {trend.get('title', 'Untitled Trend')}</div>
+                        {
+                            '<div class="related-searches">Related searches: ' + 
+                            ''.join([f'<span class="related-search">{related}</span>' for related in related_searches]) + 
+                            '</div>' if related_searches else 
+                            '<div class="no-related">No related searches found</div>'
+                        }
+                    </div>
+                    """, unsafe_allow_html=True)
 
                 # Analysis
                 if data.get('analysis'):
