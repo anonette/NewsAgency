@@ -103,16 +103,44 @@ def load_json_data(subfolder, json_file):
         # JSON files are in text_archive directory
         url = base_url + "text_archive/" + subfolder + json_file
         
+        # Get raw content
         response = requests.get(url)
         
         if response.status_code == 200:
-            data = response.json()
-            if not all(key in data for key in ['headlines', 'trends']):
-                raise ValueError("Missing required fields in JSON data")
-            return data
+            try:
+                # Try to parse the raw content
+                data = json.loads(response.text)
+                
+                # Verify the data structure
+                if not isinstance(data, dict):
+                    return None
+                
+                # Check required fields
+                if not all(key in data for key in ['headlines', 'trends']):
+                    return None
+                
+                # Verify trends is a list
+                trends = data.get('trends', [])
+                if not isinstance(trends, list):
+                    return None
+                
+                # Verify each trend is properly formatted
+                for trend in trends:
+                    if not isinstance(trend, dict):
+                        return None
+                    if 'title' not in trend:
+                        return None
+                    if 'related' not in trend or not isinstance(trend['related'], list):
+                        trend['related'] = []
+                
+                return data
+                
+            except json.JSONDecodeError:
+                return None
+                
         return None
-    except Exception as e:
-        st.error(f"Error loading data: {str(e)}")
+        
+    except Exception:
         return None
 
 def format_date(file_pair):
