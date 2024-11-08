@@ -5,3 +5,6 @@ deep-translator
 streamlit
 requests
 beautifulsoup4
+google-search-results
+schedule
+feedparser
