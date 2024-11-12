@@ -2,6 +2,7 @@ import streamlit as st
 import os
 import json
 from datetime import datetime
+import requests
 from pathlib import Path
 
 # Configuration and setup
@@ -11,15 +12,15 @@ st.set_page_config(
     layout="wide"
 )
 
+# Server configuration
+SERVER_URL = "http://95.216.199.241:8080"
+
 COUNTRIES = {
     "IL": ("Israel", "🇮🇱"),
     "LB": ("Lebanon", "🇱🇧"),
     "IR": ("Iran", "🇮🇷"),
     "CZ": ("Czech Republic (control)", "🇨🇿")
 }
-
-# Get base directory (parent of archive_app)
-BASE_DIR = Path(__file__).parent.parent
 
 def get_base_filename(filename):
     """Get base filename without timestamp"""
@@ -30,52 +31,45 @@ def get_base_filename(filename):
 
 @st.cache_data(ttl=3600)  # Cache for 1 hour
 def get_country_files(country_code):
-    """Get list of log files and their corresponding MP3s"""
+    """Get list of log files from server"""
     try:
         with st.spinner('Loading file list...'):
-            # Get JSON files from text_archive
-            text_archive_path = BASE_DIR / 'archive' / 'text_archive' / country_code
-            json_files = []
-            if text_archive_path.exists():
-                json_files = [f for f in text_archive_path.glob('*_log.json')]
+            # Get JSON files list
+            json_response = requests.get(f"{SERVER_URL}/{country_code}")
+            if json_response.status_code != 200:
+                st.error(f"Error accessing server: {json_response.status_code}")
+                return []
             
-            # Get MP3 files from country folder
-            country_path = BASE_DIR / 'archive' / country_code
-            mp3_files = []
-            if country_path.exists():
-                mp3_files = [f for f in country_path.glob('*_analysis.mp3')]
+            # Parse filenames from response
+            files = []
+            for line in json_response.text.split('\n'):
+                if '_log.json' in line or '_analysis.mp3' in line:
+                    files.append(line.strip())
             
             # Get all unique dates
             dates = set()
-            for f in json_files + mp3_files:
-                base_name = get_base_filename(f.name)
-                date_str = base_name.split('_')[1]
-                dates.add(date_str)
+            for filename in files:
+                if '_log.json' in filename or '_analysis.mp3' in filename:
+                    base_name = get_base_filename(filename)
+                    date_str = base_name.split('_')[1]
+                    dates.add(date_str)
             
             # Create file pairs for all dates
             file_pairs = []
             for date_str in dates:
-                # Find matching files
-                json_match = None
-                mp3_match = None
+                json_file = f"{country_code}_{date_str}_log.json"
+                mp3_file = f"{country_code}_{date_str}_analysis.mp3"
                 
-                # Look for JSON file
-                for f in json_files:
-                    if get_base_filename(f.name).split('_')[1] == date_str:
-                        json_match = f
-                        break
+                # Check if files exist
+                json_exists = any(json_file in f for f in files)
+                mp3_exists = any(mp3_file in f for f in files)
                 
-                # Look for MP3 file
-                for f in mp3_files:
-                    if get_base_filename(f.name).split('_')[1] == date_str:
-                        mp3_match = f
-                        break
-                
-                file_pairs.append({
-                    'date': date_str,
-                    'json': json_match,
-                    'mp3': mp3_match
-                })
+                if json_exists or mp3_exists:
+                    file_pairs.append({
+                        'date': date_str,
+                        'json': json_file if json_exists else None,
+                        'mp3': mp3_file if mp3_exists else None
+                    })
             
             return sorted(file_pairs, key=lambda x: x['date'], reverse=True)
     except Exception as e:
@@ -83,16 +77,19 @@ def get_country_files(country_code):
         return []
 
 @st.cache_data(ttl=3600)  # Cache JSON data for 1 hour
-def load_json_data(file_pair):
-    """Load JSON data from file"""
+def load_json_data(country_code, filename):
+    """Load JSON data from server"""
     try:
-        if not file_pair['json']:
+        if not filename:
             return None
             
         with st.spinner('Loading data...'):
-            with open(file_pair['json'], 'r', encoding='utf-8') as f:
-                data = json.load(f)
+            response = requests.get(f"{SERVER_URL}/{country_code}/{filename}")
+            if response.status_code != 200:
+                st.error(f"Error loading data: {response.status_code}")
+                return None
             
+            data = response.json()
             if not all(key in data for key in ['headlines', 'trends']):
                 raise ValueError("Missing required fields in JSON data")
             return data
@@ -101,18 +98,11 @@ def load_json_data(file_pair):
         return None
 
 @st.cache_data(ttl=3600)  # Cache audio files for 1 hour
-def get_audio_file(file_pair):
-    """Get audio file"""
-    try:
-        if not file_pair['mp3']:
-            return None
-            
-        with st.spinner('Loading audio...'):
-            with open(file_pair['mp3'], 'rb') as f:
-                return f.read()
-    except Exception as e:
-        st.warning(f"Could not load audio: {str(e)}")
+def get_audio_url(country_code, filename):
+    """Get audio URL from server"""
+    if not filename:
         return None
+    return f"{SERVER_URL}/{country_code}/{filename}"
 
 def format_date(file_pair):
     """Format date from filename"""
@@ -228,7 +218,6 @@ st.markdown('<hr class="divider">', unsafe_allow_html=True)
 # Get selected country from session state
 if 'selected_country' not in st.session_state:
     st.session_state.selected_country = None
-    st.session_state.preloaded_data = None
 
 # Show country grid if no country selected
 if not st.session_state.selected_country:
@@ -252,7 +241,6 @@ else:
 
     if st.button("← Back to Countries"):
         st.session_state.selected_country = None
-        st.session_state.preloaded_data = None
         st.rerun()
 
     st.header(f"{country_flag} {country_name}")
@@ -272,14 +260,14 @@ else:
 
     if selected_file:
         # Load and display data
-        data = load_json_data(selected_file)
+        data = load_json_data(country_code, selected_file['json'])
         if data:
             with st.container():
                 # Audio player
                 if selected_file['mp3']:
-                    audio_data = get_audio_file(selected_file)
-                    if audio_data:
-                        st.audio(audio_data, format='audio/mp3')
+                    audio_url = get_audio_url(country_code, selected_file['mp3'])
+                    if audio_url:
+                        st.audio(audio_url, format='audio/mp3')
 
                 # Headlines
                 st.subheader("📰 Official Headlines")
@@ -335,6 +323,6 @@ else:
         else:
             st.info("No data available for this date")
             if selected_file['mp3']:
-                audio_data = get_audio_file(selected_file)
-                if audio_data:
-                    st.audio(audio_data, format='audio/mp3')
+                audio_url = get_audio_url(country_code, selected_file['mp3'])
+                if audio_url:
+                    st.audio(audio_url, format='audio/mp3')
