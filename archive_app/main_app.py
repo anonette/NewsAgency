@@ -1,9 +1,8 @@
 import streamlit as st
+import os
 import json
 from datetime import datetime
-import requests
-from bs4 import BeautifulSoup
-import re
+from pathlib import Path
 
 # Configuration and setup
 st.set_page_config(
@@ -19,128 +18,100 @@ COUNTRIES = {
     "CZ": ("Czech Republic (control)", "🇨🇿")
 }
 
-# Base URL where files are hosted
-base_url = "https://hetcer3r314a.zrok.yair.cc/"
+# Get base directory (parent of archive_app)
+BASE_DIR = Path(__file__).parent.parent
 
-def fetch_directories():
-    """Fetch available country directories"""
-    response = requests.get(base_url)
-    if response.status_code == 200:
-        soup = BeautifulSoup(response.text, 'html.parser')
-        return [link.get('href') for link in soup.find_all('a') if link.get('href').endswith('/') and link.get('href') != '../']
-    else:
-        st.error(f"Could not fetch directories. Server returned status: {response.status_code}")
+def get_base_filename(filename):
+    """Get base filename without timestamp"""
+    parts = filename.split('_')
+    if len(parts) >= 2:
+        return f"{parts[0]}_{parts[1]}"  # Return country_date part
+    return filename
+
+@st.cache_data(ttl=3600)  # Cache for 1 hour
+def get_country_files(country_code):
+    """Get list of log files and their corresponding MP3s"""
+    try:
+        with st.spinner('Loading file list...'):
+            # Get JSON files from text_archive
+            text_archive_path = BASE_DIR / 'archive' / 'text_archive' / country_code
+            json_files = []
+            if text_archive_path.exists():
+                json_files = [f for f in text_archive_path.glob('*_log.json')]
+            
+            # Get MP3 files from country folder
+            country_path = BASE_DIR / 'archive' / country_code
+            mp3_files = []
+            if country_path.exists():
+                mp3_files = [f for f in country_path.glob('*_analysis.mp3')]
+            
+            # Get all unique dates
+            dates = set()
+            for f in json_files + mp3_files:
+                base_name = get_base_filename(f.name)
+                date_str = base_name.split('_')[1]
+                dates.add(date_str)
+            
+            # Create file pairs for all dates
+            file_pairs = []
+            for date_str in dates:
+                # Find matching files
+                json_match = None
+                mp3_match = None
+                
+                # Look for JSON file
+                for f in json_files:
+                    if get_base_filename(f.name).split('_')[1] == date_str:
+                        json_match = f
+                        break
+                
+                # Look for MP3 file
+                for f in mp3_files:
+                    if get_base_filename(f.name).split('_')[1] == date_str:
+                        mp3_match = f
+                        break
+                
+                file_pairs.append({
+                    'date': date_str,
+                    'json': json_match,
+                    'mp3': mp3_match
+                })
+            
+            return sorted(file_pairs, key=lambda x: x['date'], reverse=True)
+    except Exception as e:
+        st.error(f"Error accessing files: {str(e)}")
         return []
 
-def fetch_files(subfolder=""):
-    """Fetch files from a specific country directory"""
-    # Fetch MP3 files from country directory
-    url = base_url + subfolder
-    
-    # Fetch JSON files from text_archive directory
-    json_url = base_url + "text_archive/" + subfolder
-    
-    mp3_files = []
-    json_files = []
-    
-    # Get MP3 files
-    response = requests.get(url)
-    if response.status_code == 200:
-        soup = BeautifulSoup(response.text, 'html.parser')
-        mp3_files = [link.get('href') for link in soup.find_all('a') 
-                    if not link.get('href').endswith('/') 
-                    and not link.get('href').endswith('.ini')
-                    and link.get('href').endswith('.mp3')]
-    
-    # Get JSON files
-    response = requests.get(json_url)
-    if response.status_code == 200:
-        soup = BeautifulSoup(response.text, 'html.parser')
-        json_files = [link.get('href') for link in soup.find_all('a') 
-                     if not link.get('href').endswith('/') 
-                     and link.get('href').endswith('.json')]
-    
-    # Group files by date
-    file_pairs = []
-    dates = set()
-    
-    # Extract dates using regex to handle timestamps
-    date_pattern = re.compile(r'_(\d{8})_\d{6}_')
-    
-    # Get dates from both MP3 and JSON files
-    for file in mp3_files + json_files:
-        match = date_pattern.search(file)
-        if match:
-            date_str = match.group(1)
-            dates.add(date_str)
-    
-    for date_str in dates:
-        # Use regex to find files for this date
-        json_pattern = re.compile(f'_{date_str}_\\d{{6}}_log\\.json$')
-        mp3_pattern = re.compile(f'_{date_str}_\\d{{6}}_analysis\\.mp3$')
-        
-        json_matches = [f for f in json_files if json_pattern.search(f)]
-        mp3_matches = [f for f in mp3_files if mp3_pattern.search(f)]
-        
-        # Sort by timestamp to get latest version
-        json_match = sorted(json_matches)[-1] if json_matches else None
-        mp3_match = sorted(mp3_matches)[-1] if mp3_matches else None
-        
-        file_pairs.append({
-            'date': date_str,
-            'json': json_match,
-            'mp3': mp3_match
-        })
-    
-    return sorted(file_pairs, key=lambda x: x['date'], reverse=True)
-
-def load_json_data(subfolder, json_file):
+@st.cache_data(ttl=3600)  # Cache JSON data for 1 hour
+def load_json_data(file_pair):
     """Load JSON data from file"""
     try:
-        if not json_file:
+        if not file_pair['json']:
             return None
             
-        # JSON files are in text_archive directory
-        url = base_url + "text_archive/" + subfolder + json_file
-        
-        # Get raw content
-        response = requests.get(url)
-        
-        if response.status_code == 200:
-            try:
-                # Try to parse the raw content
-                data = json.loads(response.text)
-                
-                # Verify the data structure
-                if not isinstance(data, dict):
-                    return None
-                
-                # Check required fields
-                if not all(key in data for key in ['headlines', 'trends']):
-                    return None
-                
-                # Verify trends is a list
-                trends = data.get('trends', [])
-                if not isinstance(trends, list):
-                    return None
-                
-                # Verify each trend is properly formatted
-                for trend in trends:
-                    if not isinstance(trend, dict):
-                        return None
-                    if 'title' not in trend:
-                        return None
-                    if 'related' not in trend or not isinstance(trend['related'], list):
-                        trend['related'] = []
-                
-                return data
-                
-            except json.JSONDecodeError:
-                return None
-                
+        with st.spinner('Loading data...'):
+            with open(file_pair['json'], 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            
+            if not all(key in data for key in ['headlines', 'trends']):
+                raise ValueError("Missing required fields in JSON data")
+            return data
+    except Exception as e:
+        st.error(f"Error loading data: {str(e)}")
         return None
-        
-    except Exception:
+
+@st.cache_data(ttl=3600)  # Cache audio files for 1 hour
+def get_audio_file(file_pair):
+    """Get audio file"""
+    try:
+        if not file_pair['mp3']:
+            return None
+            
+        with st.spinner('Loading audio...'):
+            with open(file_pair['mp3'], 'rb') as f:
+                return f.read()
+    except Exception as e:
+        st.warning(f"Could not load audio: {str(e)}")
         return None
 
 def format_date(file_pair):
@@ -164,7 +135,11 @@ def format_date(file_pair):
     except:
         return file_pair['date']
 
-# Add custom CSS
+def has_rtl_text(text):
+    """Check if text contains RTL characters (Hebrew or Arabic)"""
+    return any(ord(c) > 0x590 and ord(c) < 0x6FF for c in text)
+
+# Add custom CSS with RTL support
 st.markdown("""
 <style>
     .stApp {
@@ -231,6 +206,17 @@ st.markdown("""
         font-size: 0.9em;
         margin-left: 1em;
     }
+    [dir="rtl"] {
+        text-align: right !important;
+        direction: rtl !important;
+    }
+    .rtl-container {
+        display: flex;
+        flex-direction: row-reverse;
+        justify-content: flex-start;
+        align-items: center;
+        gap: 0.5em;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -242,6 +228,7 @@ st.markdown('<hr class="divider">', unsafe_allow_html=True)
 # Get selected country from session state
 if 'selected_country' not in st.session_state:
     st.session_state.selected_country = None
+    st.session_state.preloaded_data = None
 
 # Show country grid if no country selected
 if not st.session_state.selected_country:
@@ -265,12 +252,13 @@ else:
 
     if st.button("← Back to Countries"):
         st.session_state.selected_country = None
+        st.session_state.preloaded_data = None
         st.rerun()
 
     st.header(f"{country_flag} {country_name}")
 
     # Get available files
-    files = fetch_files(f"{country_code}/")
+    files = get_country_files(country_code)
     if not files:
         st.warning("No analysis files available")
         st.stop()
@@ -284,18 +272,24 @@ else:
 
     if selected_file:
         # Load and display data
-        data = load_json_data(f"{country_code}/", selected_file['json'])
+        data = load_json_data(selected_file)
         if data:
             with st.container():
                 # Audio player
                 if selected_file['mp3']:
-                    audio_url = base_url + country_code + "/" + selected_file['mp3']
-                    st.audio(audio_url, format='audio/mp3')
+                    audio_data = get_audio_file(selected_file)
+                    if audio_data:
+                        st.audio(audio_data, format='audio/mp3')
 
                 # Headlines
                 st.subheader("📰 Official Headlines")
                 for headline in data.get('headlines', []):
-                    st.markdown(f"• {headline}")
+                    # Check if headline contains RTL text
+                    if has_rtl_text(headline):
+                        # Display RTL text with proper direction
+                        st.markdown(f'<div dir="rtl" style="text-align: right;">• {headline}</div>', unsafe_allow_html=True)
+                    else:
+                        st.markdown(f"• {headline}")
 
                 # Trends
                 st.subheader("🔍 Google Trends")
@@ -303,16 +297,34 @@ else:
                 
                 # Display each trend in a container
                 for i, trend in enumerate(trends, 1):
+                    title = trend.get('title', 'Untitled Trend')
                     related_searches = trend.get('related', [])
+                    
+                    # Check if title contains RTL text
+                    has_rtl_title = has_rtl_text(title)
+                    
+                    # Create related searches HTML
+                    related_html = ""
+                    if related_searches:
+                        related_spans = []
+                        for related in related_searches:
+                            # Check if related search contains RTL text
+                            has_rtl_related = has_rtl_text(related)
+                            if has_rtl_related:
+                                related_spans.append(f'<span class="related-search" dir="rtl" style="text-align: right;">{related}</span>')
+                            else:
+                                related_spans.append(f'<span class="related-search">{related}</span>')
+                        related_html = '<div class="related-searches">Related searches: ' + ''.join(related_spans) + '</div>'
+                    else:
+                        related_html = '<div class="no-related">No related searches found</div>'
+                    
+                    # Display the trend with proper RTL support
                     st.markdown(f"""
                     <div class="trend-container">
-                        <div class="trend-title">{i}. {trend.get('title', 'Untitled Trend')}</div>
-                        {
-                            '<div class="related-searches">Related searches: ' + 
-                            ''.join([f'<span class="related-search">{related}</span>' for related in related_searches]) + 
-                            '</div>' if related_searches else 
-                            '<div class="no-related">No related searches found</div>'
-                        }
+                        <div class="trend-title" {f'dir="rtl" style="text-align: right;"' if has_rtl_title else ''}>
+                            {i}. {title}
+                        </div>
+                        {related_html}
                     </div>
                     """, unsafe_allow_html=True)
 
@@ -323,5 +335,6 @@ else:
         else:
             st.info("No data available for this date")
             if selected_file['mp3']:
-                audio_url = base_url + country_code + "/" + selected_file['mp3']
-                st.audio(audio_url, format='audio/mp3')
+                audio_data = get_audio_file(selected_file)
+                if audio_data:
+                    st.audio(audio_data, format='audio/mp3')
