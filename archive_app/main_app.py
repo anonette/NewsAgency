@@ -3,7 +3,8 @@ import os
 import json
 from datetime import datetime
 import requests
-from pathlib import Path
+import base64
+from io import BytesIO
 
 # Configuration and setup
 st.set_page_config(
@@ -22,87 +23,55 @@ COUNTRIES = {
     "CZ": ("Czech Republic (control)", "🇨🇿")
 }
 
-def get_base_filename(filename):
-    """Get base filename without timestamp"""
-    parts = filename.split('_')
-    if len(parts) >= 2:
-        return f"{parts[0]}_{parts[1]}"  # Return country_date part
-    return filename
+# Known files that exist on the server
+KNOWN_FILES = {
+    "IL": [
+        {
+            'date': '20241112',
+            'json': 'IL_20241112_132247_log.json',
+            'mp3': 'IL_20241112_132247_analysis.mp3'
+        },
+        {
+            'date': '20241110',
+            'json': 'IL_20241110_105140_log.json',
+            'mp3': 'IL_20241110_105140_analysis.mp3'
+        },
+        {
+            'date': '20241109',
+            'json': 'IL_20241109_201224_log.json',
+            'mp3': 'IL_20241109_201224_analysis.mp3'
+        }
+    ]
+}
 
 @st.cache_data(ttl=3600)  # Cache for 1 hour
 def get_country_files(country_code):
-    """Get list of log files from server"""
+    """Get list of log files"""
+    return KNOWN_FILES.get(country_code, [])
+
+@st.cache_data(ttl=3600)  # Cache data for 1 hour
+def fetch_file(url, file_type='json'):
+    """Fetch file from server with retries"""
     try:
-        with st.spinner('Loading file list...'):
-            # Get JSON files list
-            json_response = requests.get(f"{SERVER_URL}/{country_code}")
-            if json_response.status_code != 200:
-                st.error(f"Error accessing server: {json_response.status_code}")
-                return []
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        
+        if file_type == 'json':
+            return response.json()
+        else:  # mp3
+            return base64.b64encode(response.content).decode()
             
-            # Parse filenames from response
-            files = []
-            for line in json_response.text.split('\n'):
-                if '_log.json' in line or '_analysis.mp3' in line:
-                    files.append(line.strip())
-            
-            # Get all unique dates
-            dates = set()
-            for filename in files:
-                if '_log.json' in filename or '_analysis.mp3' in filename:
-                    base_name = get_base_filename(filename)
-                    date_str = base_name.split('_')[1]
-                    dates.add(date_str)
-            
-            # Create file pairs for all dates
-            file_pairs = []
-            for date_str in dates:
-                json_file = f"{country_code}_{date_str}_log.json"
-                mp3_file = f"{country_code}_{date_str}_analysis.mp3"
-                
-                # Check if files exist
-                json_exists = any(json_file in f for f in files)
-                mp3_exists = any(mp3_file in f for f in files)
-                
-                if json_exists or mp3_exists:
-                    file_pairs.append({
-                        'date': date_str,
-                        'json': json_file if json_exists else None,
-                        'mp3': mp3_file if mp3_exists else None
-                    })
-            
-            return sorted(file_pairs, key=lambda x: x['date'], reverse=True)
-    except Exception as e:
-        st.error(f"Error accessing files: {str(e)}")
-        return []
+    except Exception:
+        return None
 
 @st.cache_data(ttl=3600)  # Cache JSON data for 1 hour
 def load_json_data(country_code, filename):
     """Load JSON data from server"""
-    try:
-        if not filename:
-            return None
-            
-        with st.spinner('Loading data...'):
-            response = requests.get(f"{SERVER_URL}/{country_code}/{filename}")
-            if response.status_code != 200:
-                st.error(f"Error loading data: {response.status_code}")
-                return None
-            
-            data = response.json()
-            if not all(key in data for key in ['headlines', 'trends']):
-                raise ValueError("Missing required fields in JSON data")
-            return data
-    except Exception as e:
-        st.error(f"Error loading data: {str(e)}")
-        return None
-
-@st.cache_data(ttl=3600)  # Cache audio files for 1 hour
-def get_audio_url(country_code, filename):
-    """Get audio URL from server"""
     if not filename:
         return None
-    return f"{SERVER_URL}/{country_code}/{filename}"
+    
+    url = f"{SERVER_URL}/text_archive/{country_code}/{filename}"
+    return fetch_file(url, 'json')
 
 def format_date(file_pair):
     """Format date from filename"""
@@ -207,6 +176,17 @@ st.markdown("""
         align-items: center;
         gap: 0.5em;
     }
+    .audio-player {
+        margin: 1em 0;
+        padding: 1em;
+        background-color: white;
+        border-radius: 5px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    audio {
+        width: 100%;
+        margin-top: 0.5em;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -259,70 +239,69 @@ else:
     )
 
     if selected_file:
+        # Audio player
+        if selected_file['mp3']:
+            audio_url = f"{SERVER_URL}/{country_code}/{selected_file['mp3']}"
+            audio_data = fetch_file(audio_url, 'mp3')
+            if audio_data:
+                st.markdown('<div class="audio-player">', unsafe_allow_html=True)
+                st.markdown(f'<audio controls src="data:audio/mp3;base64,{audio_data}"></audio>', unsafe_allow_html=True)
+                st.markdown('</div>', unsafe_allow_html=True)
+        
         # Load and display data
         data = load_json_data(country_code, selected_file['json'])
+        
         if data:
-            with st.container():
-                # Audio player
-                if selected_file['mp3']:
-                    audio_url = get_audio_url(country_code, selected_file['mp3'])
-                    if audio_url:
-                        st.audio(audio_url, format='audio/mp3')
+            # Headlines
+            st.subheader("📰 Official Headlines")
+            for headline in data.get('headlines', []):
+                # Check if headline contains RTL text
+                if has_rtl_text(headline):
+                    # Display RTL text with proper direction
+                    st.markdown(f'<div dir="rtl" style="text-align: right;">• {headline}</div>', unsafe_allow_html=True)
+                else:
+                    st.markdown(f"• {headline}")
 
-                # Headlines
-                st.subheader("📰 Official Headlines")
-                for headline in data.get('headlines', []):
-                    # Check if headline contains RTL text
-                    if has_rtl_text(headline):
-                        # Display RTL text with proper direction
-                        st.markdown(f'<div dir="rtl" style="text-align: right;">• {headline}</div>', unsafe_allow_html=True)
-                    else:
-                        st.markdown(f"• {headline}")
-
-                # Trends
-                st.subheader("🔍 Google Trends")
-                trends = data.get('trends', [])
+            # Trends
+            st.subheader("🔍 Google Trends")
+            trends = data.get('trends', [])
+            
+            # Display each trend in a container
+            for i, trend in enumerate(trends, 1):
+                title = trend.get('title', 'Untitled Trend')
+                related_searches = trend.get('related', [])
                 
-                # Display each trend in a container
-                for i, trend in enumerate(trends, 1):
-                    title = trend.get('title', 'Untitled Trend')
-                    related_searches = trend.get('related', [])
-                    
-                    # Check if title contains RTL text
-                    has_rtl_title = has_rtl_text(title)
-                    
-                    # Create related searches HTML
-                    related_html = ""
-                    if related_searches:
-                        related_spans = []
-                        for related in related_searches:
-                            # Check if related search contains RTL text
-                            has_rtl_related = has_rtl_text(related)
-                            if has_rtl_related:
-                                related_spans.append(f'<span class="related-search" dir="rtl" style="text-align: right;">{related}</span>')
-                            else:
-                                related_spans.append(f'<span class="related-search">{related}</span>')
-                        related_html = '<div class="related-searches">Related searches: ' + ''.join(related_spans) + '</div>'
-                    else:
-                        related_html = '<div class="no-related">No related searches found</div>'
-                    
-                    # Display the trend with proper RTL support
-                    st.markdown(f"""
-                    <div class="trend-container">
-                        <div class="trend-title" {f'dir="rtl" style="text-align: right;"' if has_rtl_title else ''}>
-                            {i}. {title}
-                        </div>
-                        {related_html}
+                # Check if title contains RTL text
+                has_rtl_title = has_rtl_text(title)
+                
+                # Create related searches HTML
+                related_html = ""
+                if related_searches:
+                    related_spans = []
+                    for related in related_searches:
+                        # Check if related search contains RTL text
+                        has_rtl_related = has_rtl_text(related)
+                        if has_rtl_related:
+                            related_spans.append(f'<span class="related-search" dir="rtl" style="text-align: right;">{related}</span>')
+                        else:
+                            related_spans.append(f'<span class="related-search">{related}</span>')
+                    related_html = '<div class="related-searches">Related searches: ' + ''.join(related_spans) + '</div>'
+                else:
+                    related_html = '<div class="no-related">No related searches found</div>'
+                
+                # Display the trend with proper RTL support
+                st.markdown(f"""
+                <div class="trend-container">
+                    <div class="trend-title" {f'dir="rtl" style="text-align: right;"' if has_rtl_title else ''}>
+                        {i}. {title}
                     </div>
-                    """, unsafe_allow_html=True)
+                    {related_html}
+                </div>
+                """, unsafe_allow_html=True)
 
-                # Analysis
-                if data.get('analysis'):
-                    st.subheader("🎭 Analysis")
-                    st.markdown(data['analysis'])
+            # Analysis
+            if data.get('analysis'):
+                st.subheader("🎭 Analysis")
+                st.markdown(data['analysis'])
         else:
             st.info("No data available for this date")
-            if selected_file['mp3']:
-                audio_url = get_audio_url(country_code, selected_file['mp3'])
-                if audio_url:
-                    st.audio(audio_url, format='audio/mp3')
