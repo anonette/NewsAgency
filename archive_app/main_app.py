@@ -5,6 +5,10 @@ from datetime import datetime
 import requests
 import base64
 from io import BytesIO
+import urllib3
+
+# Disable SSL warnings
+urllib3.disable_warnings()
 
 # Configuration and setup
 st.set_page_config(
@@ -15,6 +19,15 @@ st.set_page_config(
 
 # Server configuration
 SERVER_URL = "http://95.216.199.241:8080"
+
+# Configure session for requests
+session = requests.Session()
+session.verify = False  # Disable SSL verification
+session.headers.update({
+    'User-Agent': 'Mozilla/5.0',
+    'Accept': '*/*',
+    'Connection': 'keep-alive'
+})
 
 COUNTRIES = {
     "IL": ("Israel", "🇮🇱"),
@@ -53,7 +66,7 @@ def get_country_files(country_code):
 def fetch_file(url, file_type='json'):
     """Fetch file from server with retries"""
     try:
-        response = requests.get(url, timeout=10)
+        response = session.get(url, timeout=10)
         response.raise_for_status()
         
         if file_type == 'json':
