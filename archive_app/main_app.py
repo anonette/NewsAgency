@@ -3,8 +3,6 @@ import os
 import json
 from datetime import datetime
 import requests
-import base64
-from io import BytesIO
 import urllib3
 
 # Disable SSL warnings
@@ -19,15 +17,6 @@ st.set_page_config(
 
 # Server configuration
 SERVER_URL = "http://95.216.199.241:8080"
-
-# Configure session for requests
-session = requests.Session()
-session.verify = False  # Disable SSL verification
-session.headers.update({
-    'User-Agent': 'Mozilla/5.0',
-    'Accept': '*/*',
-    'Connection': 'keep-alive'
-})
 
 COUNTRIES = {
     "IL": ("Israel", "🇮🇱"),
@@ -62,29 +51,25 @@ def get_country_files(country_code):
     """Get list of log files"""
     return KNOWN_FILES.get(country_code, [])
 
-@st.cache_data(ttl=3600)  # Cache data for 1 hour
-def fetch_file(url, file_type='json'):
-    """Fetch file from server with retries"""
-    try:
-        response = session.get(url, timeout=10)
-        response.raise_for_status()
-        
-        if file_type == 'json':
-            return response.json()
-        else:  # mp3
-            return base64.b64encode(response.content).decode()
-            
-    except Exception:
-        return None
-
 @st.cache_data(ttl=3600)  # Cache JSON data for 1 hour
 def load_json_data(country_code, filename):
     """Load JSON data from server"""
     if not filename:
         return None
     
-    url = f"{SERVER_URL}/text_archive/{country_code}/{filename}"
-    return fetch_file(url, 'json')
+    try:
+        headers = {
+            'User-Agent': 'Mozilla/5.0',
+            'Accept': 'application/json',
+            'Origin': 'http://localhost:8501',
+            'Access-Control-Allow-Origin': '*'
+        }
+        url = f"{SERVER_URL}/text_archive/{country_code}/{filename}"
+        response = requests.get(url, headers=headers, timeout=10, verify=False)
+        response.raise_for_status()
+        return response.json()
+    except:
+        return None
 
 def format_date(file_pair):
     """Format date from filename"""
@@ -189,17 +174,6 @@ st.markdown("""
         align-items: center;
         gap: 0.5em;
     }
-    .audio-player {
-        margin: 1em 0;
-        padding: 1em;
-        background-color: white;
-        border-radius: 5px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    }
-    audio {
-        width: 100%;
-        margin-top: 0.5em;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -252,15 +226,6 @@ else:
     )
 
     if selected_file:
-        # Audio player
-        if selected_file['mp3']:
-            audio_url = f"{SERVER_URL}/{country_code}/{selected_file['mp3']}"
-            audio_data = fetch_file(audio_url, 'mp3')
-            if audio_data:
-                st.markdown('<div class="audio-player">', unsafe_allow_html=True)
-                st.markdown(f'<audio controls src="data:audio/mp3;base64,{audio_data}"></audio>', unsafe_allow_html=True)
-                st.markdown('</div>', unsafe_allow_html=True)
-        
         # Load and display data
         data = load_json_data(country_code, selected_file['json'])
         
@@ -318,3 +283,8 @@ else:
                 st.markdown(data['analysis'])
         else:
             st.info("No data available for this date")
+            
+        # Audio player
+        if selected_file['mp3']:
+            audio_url = f"{SERVER_URL}/{country_code}/{selected_file['mp3']}"
+            st.audio(audio_url)
