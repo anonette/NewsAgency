@@ -11,31 +11,27 @@ def initialize_storage():
     """Initialize cloud storage with error handling"""
     global storage
     try:
-        # Get credentials and bucket name from Streamlit secrets
-        if not hasattr(st.secrets, 'GOOGLE_APPLICATION_CREDENTIALS_JSON'):
-            raise ValueError("GOOGLE_APPLICATION_CREDENTIALS_JSON not found in Streamlit secrets")
+        # Check if storage client exists in session state
+        if 'storage_client' not in st.session_state:
+            raise ValueError("Storage client not found in session state. Please ensure streamlit_hebrew.py is the entry point.")
         
-        bucket_name = st.secrets.get('BUCKET_NAME', 'israel-trends-archive')
-        st.write("Debug: Using bucket:", bucket_name)
-        
-        # Create storage client
-        storage = CloudStorage(bucket_name=bucket_name)
-        st.write("Debug: Storage client initialized")
+        # Create CloudStorage instance using existing client
+        storage = CloudStorage()
+        print("Debug: Storage client initialized from session state")
         
     except Exception as e:
         import traceback
         error_details = f"""
-        Error initializing cloud storage. Please check:
-        1. GOOGLE_APPLICATION_CREDENTIALS_JSON is set in Streamlit secrets
-        2. BUCKET_NAME is set in Streamlit secrets (optional, defaults to 'israel-trends-archive')
-        3. Service account has necessary permissions
+        Error initializing storage. Please check:
+        1. The app is launched through streamlit_hebrew.py
+        2. Storage client is properly initialized in session state
         
         Error: {str(e)}
         
         Stack trace:
         {traceback.format_exc()}
         """
-        st.error("Failed to initialize cloud storage")
+        st.error("Failed to initialize storage")
         st.code(error_details, language="text")
         raise e
 
@@ -81,37 +77,11 @@ def main(config_set=False):
     st.title("🇮🇱 Israel Trends Analysis")
     st.markdown("### Browse Žižek-style analyses of Israeli trends")
 
-    # Debug secrets
-    st.write("Debug: Checking Streamlit secrets")
-    try:
-        # Try to access secrets directly
-        creds_json = st.secrets["GOOGLE_APPLICATION_CREDENTIALS_JSON"]
-        st.write("Debug: Found credentials in secrets")
-        st.write("Debug: Credentials JSON type:", type(creds_json))
-        st.write("Debug: Credentials JSON length:", len(creds_json))
-        
-        bucket_name = st.secrets.get("BUCKET_NAME", "israel-trends-archive")
-        st.write("Debug: Using bucket:", bucket_name)
-    except Exception as e:
-        st.write("Debug: Error accessing secrets:", str(e))
+    # Initialize storage
+    initialize_storage()
     
-    # Initialize storage with debug info
-    st.write("Debug: Initializing storage")
-    try:
-        initialize_storage()
-        st.write("Debug: Storage initialized successfully")
-    except Exception as e:
-        st.write("Debug: Error initializing storage:", str(e))
-        raise
-    
-    # Get available dates with debug info
-    st.write("Debug: Getting available dates")
-    try:
-        dates = get_available_dates()
-        st.write("Debug: Found", len(dates) if dates else 0, "dates")
-    except Exception as e:
-        st.write("Debug: Error getting dates:", str(e))
-        raise
+    # Get available dates
+    dates = get_available_dates()
 
     if not dates:
         st.info("No archived analyses found")
