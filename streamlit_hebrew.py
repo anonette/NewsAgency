@@ -16,14 +16,36 @@ try:
     
     # Get credentials from secrets
     st.write("Debug: Loading credentials from secrets")
-    try:
-        creds_dict = json.loads(st.secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON)
-        st.write("Debug: Successfully parsed credentials JSON")
-    except json.JSONDecodeError as e:
-        st.write("Debug: Error parsing credentials JSON")
+    raw_creds = st.secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON
+    st.write("Debug: Raw credentials type:", type(raw_creds))
+    st.write("Debug: Raw credentials starts with:", raw_creds[:50] if raw_creds else "None")
+    
+    # Clean up the JSON string
+    if isinstance(raw_creds, str):
+        # Remove any leading/trailing whitespace
+        cleaned_creds = raw_creds.strip()
+        # Remove any triple quotes if present
+        cleaned_creds = cleaned_creds.replace("'''", "")
+        st.write("Debug: Cleaned credentials start:", cleaned_creds[:50])
+        
+        try:
+            creds_dict = json.loads(cleaned_creds)
+            st.write("Debug: Successfully parsed credentials JSON")
+        except json.JSONDecodeError as e:
+            st.write("Debug: JSON parse error:", str(e))
+            st.write("Debug: Error position:", e.pos)
+            st.write("Debug: Error line:", e.lineno)
+            st.write("Debug: Error column:", e.colno)
+            raise ValueError(
+                "Invalid JSON format in GOOGLE_APPLICATION_CREDENTIALS_JSON.\n"
+                "Please ensure the credentials are properly formatted in Streamlit secrets.\n"
+                f"Error: {str(e)}"
+            )
+    else:
+        st.write("Debug: Unexpected credentials type")
         raise ValueError(
-            "Invalid JSON format in GOOGLE_APPLICATION_CREDENTIALS_JSON.\n"
-            "Please ensure the credentials are properly formatted in Streamlit secrets."
+            "GOOGLE_APPLICATION_CREDENTIALS_JSON must be a string.\n"
+            f"Got type: {type(raw_creds)}"
         )
     
     # Create credentials object
