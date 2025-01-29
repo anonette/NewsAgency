@@ -11,14 +11,22 @@ def initialize_storage():
     """Initialize cloud storage with error handling"""
     global storage
     try:
-        # Get bucket name from Streamlit secrets or use default
-        bucket_name = st.secrets.get('BUCKET_NAME', 'israel-trends-archive') if hasattr(st.secrets, 'BUCKET_NAME') else 'israel-trends-archive'
+        # Get credentials and bucket name from Streamlit secrets
+        if not hasattr(st.secrets, 'GOOGLE_APPLICATION_CREDENTIALS_JSON'):
+            raise ValueError("GOOGLE_APPLICATION_CREDENTIALS_JSON not found in Streamlit secrets")
+        
+        bucket_name = st.secrets.get('BUCKET_NAME', 'israel-trends-archive')
+        st.write("Debug: Using bucket:", bucket_name)
+        
+        # Create storage client
         storage = CloudStorage(bucket_name=bucket_name)
+        st.write("Debug: Storage client initialized")
+        
     except Exception as e:
         import traceback
         error_details = f"""
         Error initializing cloud storage. Please check:
-        1. Google Cloud credentials are properly configured
+        1. GOOGLE_APPLICATION_CREDENTIALS_JSON is set in Streamlit secrets
         2. BUCKET_NAME is set in Streamlit secrets (optional, defaults to 'israel-trends-archive')
         3. Service account has necessary permissions
         
@@ -73,6 +81,20 @@ def main(config_set=False):
     st.title("🇮🇱 Israel Trends Analysis")
     st.markdown("### Browse Žižek-style analyses of Israeli trends")
 
+    # Debug secrets
+    st.write("Debug: Checking Streamlit secrets")
+    try:
+        # Try to access secrets directly
+        creds_json = st.secrets["GOOGLE_APPLICATION_CREDENTIALS_JSON"]
+        st.write("Debug: Found credentials in secrets")
+        st.write("Debug: Credentials JSON type:", type(creds_json))
+        st.write("Debug: Credentials JSON length:", len(creds_json))
+        
+        bucket_name = st.secrets.get("BUCKET_NAME", "israel-trends-archive")
+        st.write("Debug: Using bucket:", bucket_name)
+    except Exception as e:
+        st.write("Debug: Error accessing secrets:", str(e))
+    
     # Initialize storage
     initialize_storage()
     

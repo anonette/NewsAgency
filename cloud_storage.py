@@ -3,6 +3,7 @@ from google.oauth2 import service_account
 import streamlit as st
 import os
 import json
+import tempfile
 from datetime import datetime
 
 class CloudStorage:
@@ -12,32 +13,13 @@ class CloudStorage:
         Args:
             bucket_name: Name of the Google Cloud Storage bucket
         """
-        try:
-            # Get credentials from Streamlit secrets
-            if hasattr(st.secrets, 'GOOGLE_APPLICATION_CREDENTIALS_JSON'):
-                st.write("Debug: Found credentials in Streamlit secrets")
-                creds_dict = json.loads(st.secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON)
-                credentials = service_account.Credentials.from_service_account_info(creds_dict)
-                self.storage_client = storage.Client(
-                    project='israel-trends-viewer',
-                    credentials=credentials
-                )
-                st.write("Debug: Successfully created storage client")
-            else:
-                st.write("Debug: No credentials found in Streamlit secrets")
-                raise ValueError(
-                    "Google Cloud credentials not found. Please check:\n"
-                    "1. Credentials are properly set in Streamlit Cloud secrets\n"
-                    "2. The credentials JSON is properly formatted"
-                )
-        except Exception as e:
-            st.write("Debug: Error creating storage client:", str(e))
+        # Use the storage client from session state
+        import streamlit as st
+        if 'storage_client' not in st.session_state:
             raise ValueError(
-                "Failed to initialize Google Cloud Storage client. Please check:\n"
-                "1. Credentials are properly set in Streamlit Cloud secrets\n"
-                "2. The service account has necessary permissions\n"
-                f"\nError: {str(e)}"
+                "Storage client not found in session state. Please ensure streamlit_hebrew.py is the entry point."
             )
+        self.storage_client = st.session_state.storage_client
         self.bucket_name = bucket_name
         self.bucket = self.storage_client.bucket(bucket_name)
 
