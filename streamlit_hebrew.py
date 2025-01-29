@@ -30,8 +30,13 @@ try:
     
     # Parse and clean credentials
     try:
-        # Parse JSON and handle any formatting issues
-        creds_dict = json.loads(raw_creds)
+        # Clean up the JSON string
+        cleaned_creds = raw_creds.replace('\n', '')  # Remove all newlines
+        cleaned_creds = ' '.join(cleaned_creds.split())  # Normalize whitespace
+        st.write("Debug: Cleaned credentials:", cleaned_creds[:100])
+        
+        # Parse JSON
+        creds_dict = json.loads(cleaned_creds)
         st.write("Debug: Successfully parsed credentials JSON")
         
         # Fix private key formatting if needed
