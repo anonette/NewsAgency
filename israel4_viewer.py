@@ -132,9 +132,10 @@ def main(config_set=False):
                 with trends_col:
                     st.header("Popular Searches")
                     for trend in analysis_data['trends']:
-                        with st.expander(f"""<div dir="rtl" style="text-align: right;">**{trend['title']}**</div>""", expanded=True):
+                        title_html = f"""<div dir="rtl" style="text-align: right;">{trend['title']}</div>"""
+                        with st.expander(title_html, expanded=True):
                             if trend['related']:
-                                st.markdown("""<div dir="rtl" style="text-align: right;">Related searches:</div>""", unsafe_allow_html=True)
+                                st.markdown("""<div dir="rtl" style="text-align: right;">חיפושים קשורים:</div>""", unsafe_allow_html=True)
                                 for related in trend['related']:
                                     st.markdown(f"""<div dir="rtl" style="text-align: right;">• {related}</div>""", unsafe_allow_html=True)
 
