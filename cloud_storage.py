@@ -7,33 +7,46 @@ import tempfile
 from datetime import datetime
 
 class CloudStorage:
-    def __init__(self, bucket_name="israel-trends-archive"):
+    def __init__(self, bucket_name="israel-trends-archive", storage_client=None):
         """Initialize Google Cloud Storage client
         
         Args:
             bucket_name: Name of the Google Cloud Storage bucket
+            storage_client: Optional existing storage client. If not provided, will try to get from session state or create new.
         """
-        # Use the storage client from session state
-        import streamlit as st
-        if 'storage_client' not in st.session_state:
-            raise ValueError(
-                "Storage client not found in session state. Please ensure streamlit_hebrew.py is the entry point."
-            )
-        self.storage_client = st.session_state.storage_client
-        # Set up bucket with debug info
-        self.bucket_name = bucket_name
-        st.write("Debug: Accessing bucket:", bucket_name)
-        self.bucket = self.storage_client.bucket(bucket_name)
-        
-        # Test bucket access
         try:
-            # List a few blobs to test access
+            if storage_client:
+                self.storage_client = storage_client
+            else:
+                try:
+                    # Try to get from Streamlit session state first
+                    import streamlit as st
+                    if hasattr(st, 'session_state') and 'storage_client' in st.session_state:
+                        print("Using storage client from session state")
+                        self.storage_client = st.session_state.storage_client
+                    else:
+                        raise ValueError("No storage client in session state")
+                except:
+                    # If not in Streamlit context, create new client from credentials file
+                    print("Creating new storage client from credentials")
+                    if os.path.exists('key.json'):
+                        credentials = service_account.Credentials.from_service_account_file('key.json')
+                        self.storage_client = storage.Client(credentials=credentials)
+                    else:
+                        raise ValueError("No credentials found. Please provide key.json file.")
+            
+            # Set up bucket
+            self.bucket_name = bucket_name
+            print(f"Accessing bucket: {bucket_name}")
+            self.bucket = self.storage_client.bucket(bucket_name)
+            
+            # Test bucket access
             blobs = list(self.storage_client.list_blobs(bucket_name, max_results=1))
-            st.write("Debug: Successfully accessed bucket")
-            st.write("Debug: Found", len(blobs), "blobs")
+            print(f"Successfully accessed bucket. Found {len(blobs)} blobs")
+            
         except Exception as e:
-            st.write("Debug: Error accessing bucket:", str(e))
-            raise ValueError(f"Error accessing bucket {bucket_name}: {str(e)}")
+            print(f"Error initializing storage: {str(e)}")
+            raise
 
     def upload_analysis(self, json_path, audio_path=None):
         """Upload analysis JSON and audio file to cloud storage

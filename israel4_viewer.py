@@ -17,7 +17,6 @@ def initialize_storage():
         
         # Create CloudStorage instance using existing client
         storage = CloudStorage()
-        print("Debug: Storage client initialized from session state")
         
     except Exception as e:
         import traceback
@@ -128,20 +127,20 @@ def main(config_set=False):
                 with news_col:
                     st.header("Official Headlines")
                     for headline in analysis_data['headlines']:
-                        st.markdown(f"• {headline}")
+                        st.markdown(f"""<div dir="rtl" style="text-align: right;">• {headline}</div>""", unsafe_allow_html=True)
 
                 with trends_col:
                     st.header("Popular Searches")
                     for trend in analysis_data['trends']:
-                        with st.expander(f"**{trend['title']}**", expanded=True):
+                        with st.expander(f"""<div dir="rtl" style="text-align: right;">**{trend['title']}**</div>""", expanded=True):
                             if trend['related']:
-                                st.markdown("Related searches:")
+                                st.markdown("""<div dir="rtl" style="text-align: right;">Related searches:</div>""", unsafe_allow_html=True)
                                 for related in trend['related']:
-                                    st.markdown(f"• {related}")
+                                    st.markdown(f"""<div dir="rtl" style="text-align: right;">• {related}</div>""", unsafe_allow_html=True)
 
             with tab2:
                 st.header("Philosophical Analysis")
-                st.markdown(analysis_data['analysis'])
+                st.markdown(f"""<div dir="rtl" style="text-align: right;">{analysis_data['analysis']}</div>""", unsafe_allow_html=True)
 
             with tab3:
                 st.header("Audio Version")
