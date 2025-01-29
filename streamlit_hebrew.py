@@ -6,8 +6,11 @@ import tempfile
 # Set up credentials before importing other modules
 try:
     st.write("Debug: Setting up credentials")
+    st.write("Debug: Available secrets:", [key for key in st.secrets.keys()])
     creds_json = st.secrets["GOOGLE_APPLICATION_CREDENTIALS_JSON"]
     st.write("Debug: Found credentials in secrets")
+    st.write("Debug: Credentials type:", type(creds_json))
+    st.write("Debug: Credentials starts with:", creds_json[:100] if creds_json else "None")
     
     # Create credentials dict
     creds_dict = json.loads(creds_json)

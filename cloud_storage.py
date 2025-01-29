@@ -20,8 +20,20 @@ class CloudStorage:
                 "Storage client not found in session state. Please ensure streamlit_hebrew.py is the entry point."
             )
         self.storage_client = st.session_state.storage_client
+        # Set up bucket with debug info
         self.bucket_name = bucket_name
+        st.write("Debug: Accessing bucket:", bucket_name)
         self.bucket = self.storage_client.bucket(bucket_name)
+        
+        # Test bucket access
+        try:
+            # List a few blobs to test access
+            blobs = list(self.storage_client.list_blobs(bucket_name, max_results=1))
+            st.write("Debug: Successfully accessed bucket")
+            st.write("Debug: Found", len(blobs), "blobs")
+        except Exception as e:
+            st.write("Debug: Error accessing bucket:", str(e))
+            raise ValueError(f"Error accessing bucket {bucket_name}: {str(e)}")
 
     def upload_analysis(self, json_path, audio_path=None):
         """Upload analysis JSON and audio file to cloud storage

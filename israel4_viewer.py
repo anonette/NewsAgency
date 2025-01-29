@@ -95,11 +95,23 @@ def main(config_set=False):
     except Exception as e:
         st.write("Debug: Error accessing secrets:", str(e))
     
-    # Initialize storage
-    initialize_storage()
+    # Initialize storage with debug info
+    st.write("Debug: Initializing storage")
+    try:
+        initialize_storage()
+        st.write("Debug: Storage initialized successfully")
+    except Exception as e:
+        st.write("Debug: Error initializing storage:", str(e))
+        raise
     
-    # Get available dates
-    dates = get_available_dates()
+    # Get available dates with debug info
+    st.write("Debug: Getting available dates")
+    try:
+        dates = get_available_dates()
+        st.write("Debug: Found", len(dates) if dates else 0, "dates")
+    except Exception as e:
+        st.write("Debug: Error getting dates:", str(e))
+        raise
 
     if not dates:
         st.info("No archived analyses found")
