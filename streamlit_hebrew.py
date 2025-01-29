@@ -6,15 +6,25 @@ import tempfile
 # Set up credentials before importing other modules
 try:
     st.write("Debug: Setting up credentials")
-    st.write("Debug: Available secrets:", [key for key in st.secrets.keys()])
-    creds_json = st.secrets["GOOGLE_APPLICATION_CREDENTIALS_JSON"]
-    st.write("Debug: Found credentials in secrets")
-    st.write("Debug: Credentials type:", type(creds_json))
-    st.write("Debug: Credentials starts with:", creds_json[:100] if creds_json else "None")
     
-    # Create credentials dict
-    creds_dict = json.loads(creds_json)
-    st.write("Debug: Parsed credentials JSON")
+    # Check for required secrets
+    if not hasattr(st.secrets, 'GOOGLE_APPLICATION_CREDENTIALS_JSON'):
+        raise ValueError(
+            "GOOGLE_APPLICATION_CREDENTIALS_JSON not found in Streamlit secrets.\n"
+            "Please add your service account credentials to Streamlit secrets."
+        )
+    
+    # Get credentials from secrets
+    st.write("Debug: Loading credentials from secrets")
+    try:
+        creds_dict = json.loads(st.secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON)
+        st.write("Debug: Successfully parsed credentials JSON")
+    except json.JSONDecodeError as e:
+        st.write("Debug: Error parsing credentials JSON")
+        raise ValueError(
+            "Invalid JSON format in GOOGLE_APPLICATION_CREDENTIALS_JSON.\n"
+            "Please ensure the credentials are properly formatted in Streamlit secrets."
+        )
     
     # Create credentials object
     from google.oauth2 import service_account
