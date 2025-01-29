@@ -3,41 +3,48 @@ import os
 import json
 import tempfile
 
+# Set page config first
+st.set_page_config(
+    page_title="Israel Trends Analysis",
+    page_icon="🇮🇱",
+    layout="wide"
+)
+
 # Set up credentials before importing other modules
 try:
-    st.write("Debug: Setting up credentials")
+    print("Debug: Setting up credentials")
     
     # Debug: Print all available secrets
-    st.write("Debug: All available secrets:", dir(st.secrets))
-    st.write("Debug: Secrets dict:", st.secrets.to_dict())
+    print("Debug: All available secrets:", dir(st.secrets))
+    print("Debug: Secrets dict:", st.secrets.to_dict())
     
     # Check for required secrets in general section
     if not hasattr(st.secrets, 'general') or not hasattr(st.secrets.general, 'GOOGLE_APPLICATION_CREDENTIALS_JSON'):
-        st.write("Debug: Missing required secret in general section")
-        st.write("Debug: Available sections:", dir(st.secrets))
+        print("Debug: Missing required secret in general section")
+        print("Debug: Available sections:", dir(st.secrets))
         if hasattr(st.secrets, 'general'):
-            st.write("Debug: Available general secrets:", dir(st.secrets.general))
+            print("Debug: Available general secrets:", dir(st.secrets.general))
         raise ValueError(
             "GOOGLE_APPLICATION_CREDENTIALS_JSON not found in Streamlit secrets general section.\n"
             "Please add your service account credentials to Streamlit secrets under [general]."
         )
     
     # Get credentials from secrets
-    st.write("Debug: Loading credentials from secrets")
+    print("Debug: Loading credentials from secrets")
     raw_creds = st.secrets.general.GOOGLE_APPLICATION_CREDENTIALS_JSON
-    st.write("Debug: Raw credentials type:", type(raw_creds))
-    st.write("Debug: Raw credentials starts with:", raw_creds[:50] if raw_creds else "None")
+    print("Debug: Raw credentials type:", type(raw_creds))
+    print("Debug: Raw credentials starts with:", raw_creds[:50] if raw_creds else "None")
     
     # Parse and clean credentials
     try:
         # Clean up the JSON string
         cleaned_creds = raw_creds.replace('\n', '')  # Remove all newlines
         cleaned_creds = ' '.join(cleaned_creds.split())  # Normalize whitespace
-        st.write("Debug: Cleaned credentials:", cleaned_creds[:100])
+        print("Debug: Cleaned credentials:", cleaned_creds[:100])
         
         # Parse JSON
         creds_dict = json.loads(cleaned_creds)
-        st.write("Debug: Successfully parsed credentials JSON")
+        print("Debug: Successfully parsed credentials JSON")
         
         # Fix private key formatting if needed
         private_key = creds_dict.get('private_key', '')
@@ -49,20 +56,20 @@ try:
             if not private_key.endswith('\n-----END PRIVATE KEY-----\n'):
                 private_key = private_key + '\n-----END PRIVATE KEY-----\n'
             creds_dict['private_key'] = private_key
-            st.write("Debug: Fixed private key formatting")
+            print("Debug: Fixed private key formatting")
         
         # Create credentials object
         from google.oauth2 import service_account
         credentials = service_account.Credentials.from_service_account_info(creds_dict)
-        st.write("Debug: Created credentials object")
+        print("Debug: Created credentials object")
     except Exception as e:
-        st.write("Debug: Error processing credentials:", str(e))
+        print("Debug: Error processing credentials:", str(e))
         raise ValueError(f"Failed to process credentials: {str(e)}")
     
     # Get bucket name from secrets
     bucket_name = getattr(st.secrets.general, 'BUCKET_NAME', 'israel-trends-archive')
-    st.write("Debug: Using bucket name:", bucket_name)
-    st.write("Debug: Available general attributes:", dir(st.secrets.general))
+    print("Debug: Using bucket name:", bucket_name)
+    print("Debug: Available general attributes:", dir(st.secrets.general))
     
     # Set up storage client in session state
     from google.cloud import storage
@@ -70,29 +77,22 @@ try:
         project='israel-trends-viewer',
         credentials=credentials
     )
-    st.write("Debug: Created storage client in session state")
+    print("Debug: Created storage client in session state")
     
     # Test bucket access
     try:
         bucket = st.session_state.storage_client.bucket(bucket_name)
         # List a few blobs to test access
         next(bucket.list_blobs(max_results=1), None)
-        st.write("Debug: Successfully accessed bucket")
+        print("Debug: Successfully accessed bucket")
     except Exception as e:
-        st.write("Debug: Error accessing bucket:", str(e))
+        print("Debug: Error accessing bucket:", str(e))
         raise ValueError(f"Failed to access bucket {bucket_name}: {str(e)}")
 except Exception as e:
     st.error(f"Failed to set up credentials: {str(e)}")
     st.stop()
 
 def main():
-    # Set page config first
-    st.set_page_config(
-        page_title="Israel Trends Analysis",
-        page_icon="🇮🇱",
-        layout="wide"
-    )
-
     # Hide streamlit default menu
     st.markdown("""
     <style>
