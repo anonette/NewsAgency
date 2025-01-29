@@ -1,4 +1,5 @@
 from google.cloud import storage
+import streamlit as st
 import os
 import json
 from datetime import datetime
@@ -10,17 +11,38 @@ class CloudStorage:
         Args:
             bucket_name: Name of the Google Cloud Storage bucket
         """
-        print("Environment variables:")
-        print("GOOGLE_APPLICATION_CREDENTIALS:", os.getenv('GOOGLE_APPLICATION_CREDENTIALS'))
-        print("BUCKET_NAME:", os.getenv('BUCKET_NAME', 'israel-trends-archive'))
-        
         try:
-            # Let google-cloud-storage library handle credentials
-            self.storage_client = storage.Client(project='israel-trends-viewer')
+            creds_json = os.getenv('GOOGLE_APPLICATION_CREDENTIALS_JSON')
+            st.write("Debug: Checking credentials JSON")
+            
+            if not creds_json:
+                st.write("Debug: No credentials JSON found in environment")
+                raise ValueError(
+                    "Google Cloud credentials not found. Please check:\n"
+                    "1. GOOGLE_APPLICATION_CREDENTIALS_JSON environment variable is set\n"
+                    "2. The credentials JSON is properly formatted"
+                )
+            
+            # Parse credentials JSON
+            creds_dict = json.loads(creds_json)
+            st.write("Debug: Successfully parsed credentials JSON")
+            
+            # Create credentials info
+            from google.oauth2 import service_account
+            credentials = service_account.Credentials.from_service_account_info(creds_dict)
+            
+            # Create storage client with credentials
+            self.storage_client = storage.Client(
+                project='israel-trends-viewer',
+                credentials=credentials
+            )
+            st.write("Debug: Successfully created storage client")
+            
         except Exception as e:
+            st.write("Debug: Error creating storage client:", str(e))
             raise ValueError(
                 "Failed to initialize Google Cloud Storage client. Please check:\n"
-                "1. GOOGLE_APPLICATION_CREDENTIALS environment variable is set to a valid service account key file\n"
+                "1. GOOGLE_APPLICATION_CREDENTIALS_JSON environment variable contains valid credentials\n"
                 "2. The service account has necessary permissions\n"
                 f"\nError: {str(e)}"
             )

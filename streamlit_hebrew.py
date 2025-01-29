@@ -9,17 +9,17 @@ def setup_cloud_credentials():
         # Try to get credentials from Streamlit secrets first
         if hasattr(st.secrets, 'GOOGLE_APPLICATION_CREDENTIALS_JSON'):
             try:
-                # Create temporary file for credentials
-                with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
-                    json.dump(json.loads(st.secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON), f)
-                    temp_path = f.name
+                # Parse credentials JSON
+                creds_dict = json.loads(st.secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON)
                 
-                # Set environment variable to temp file path
-                os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = temp_path
-                # Also set BUCKET_NAME from secrets if available
+                # Store credentials in environment variable as JSON string
+                os.environ['GOOGLE_APPLICATION_CREDENTIALS_JSON'] = json.dumps(creds_dict)
+                
+                # Set bucket name if available
                 if hasattr(st.secrets, 'BUCKET_NAME'):
                     os.environ['BUCKET_NAME'] = st.secrets.BUCKET_NAME
-                print(f"Using credentials from Streamlit secrets")
+                
+                st.write("Debug: Successfully loaded credentials from Streamlit secrets")
                 return True
             except Exception as e:
                 st.error(
@@ -33,8 +33,10 @@ def setup_cloud_credentials():
             # For local development, use key.json
             key_path = os.path.join(os.path.dirname(__file__), 'key.json')
             if os.path.exists(key_path):
-                os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = key_path
-                print(f"Using local key.json: {key_path}")
+                with open(key_path, 'r') as f:
+                    creds_json = f.read()
+                os.environ['GOOGLE_APPLICATION_CREDENTIALS_JSON'] = creds_json
+                st.write("Debug: Successfully loaded credentials from key.json")
                 return True
             
             st.error(
