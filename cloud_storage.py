@@ -10,15 +10,33 @@ class CloudStorage:
         Args:
             bucket_name: Name of the Google Cloud Storage bucket
         """
-        # Use direct path to key.json in project directory
-        key_path = os.path.join(os.path.dirname(__file__), 'key.json')
-        if not os.path.exists(key_path):
-            raise ValueError(f"key.json not found at: {key_path}")
+        # Try environment variable first (for Streamlit Cloud)
+        creds_json = os.getenv('GOOGLE_APPLICATION_CREDENTIALS_JSON')
+        if creds_json:
+            import json
+            import tempfile
             
-        self.storage_client = storage.Client.from_service_account_json(
-            key_path,
-            project='israel-trends-viewer'
-        )
+            # Create temporary file with credentials
+            with tempfile.NamedTemporaryFile(mode='w', delete=False) as f:
+                json.dump(json.loads(creds_json), f)
+                temp_key_path = f.name
+                
+            self.storage_client = storage.Client.from_service_account_json(
+                temp_key_path,
+                project='israel-trends-viewer'
+            )
+            # Clean up temporary file
+            os.unlink(temp_key_path)
+        else:
+            # Fall back to key.json for local development
+            key_path = os.path.join(os.path.dirname(__file__), 'key.json')
+            if not os.path.exists(key_path):
+                raise ValueError(f"Neither GOOGLE_APPLICATION_CREDENTIALS_JSON environment variable nor key.json found")
+                
+            self.storage_client = storage.Client.from_service_account_json(
+                key_path,
+                project='israel-trends-viewer'
+            )
         self.bucket_name = bucket_name
         self.bucket = self.storage_client.bucket(bucket_name)
 

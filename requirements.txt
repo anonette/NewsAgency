@@ -8,3 +8,4 @@ beautifulsoup4
 google-search-results
 schedule
 feedparser
+google-cloud-storage
