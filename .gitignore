@@ -32,7 +32,8 @@ var/
 venv/
 ENV/
 .venv/
-
+.env.example
+.streamlit/
 # IDE
 .idea/
 .vscode/
