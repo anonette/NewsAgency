@@ -13,25 +13,48 @@ class CloudStorage:
         # Try environment variable first (for Streamlit Cloud)
         creds_json = os.getenv('GOOGLE_APPLICATION_CREDENTIALS_JSON')
         if creds_json:
-            import json
-            import tempfile
-            
-            # Create temporary file with credentials
-            with tempfile.NamedTemporaryFile(mode='w', delete=False) as f:
-                json.dump(json.loads(creds_json), f)
-                temp_key_path = f.name
+            try:
+                import json
+                import tempfile
                 
-            self.storage_client = storage.Client.from_service_account_json(
-                temp_key_path,
-                project='israel-trends-viewer'
-            )
-            # Clean up temporary file
-            os.unlink(temp_key_path)
+                # Create temporary file with credentials
+                with tempfile.NamedTemporaryFile(mode='w', delete=False) as f:
+                    # Handle both JSON string and raw string formats
+                    try:
+                        # Try parsing as JSON first
+                        creds_dict = json.loads(creds_json)
+                    except json.JSONDecodeError:
+                        # If that fails, try removing escaped quotes and newlines
+                        cleaned_json = creds_json.replace('\\"', '"').replace('\\n', '\n')
+                        creds_dict = json.loads(cleaned_json)
+                    
+                    json.dump(creds_dict, f)
+                    temp_key_path = f.name
+                
+                self.storage_client = storage.Client.from_service_account_json(
+                    temp_key_path,
+                    project='israel-trends-viewer'
+                )
+                # Clean up temporary file
+                os.unlink(temp_key_path)
+            except Exception as e:
+                raise ValueError(
+                    "Error processing GOOGLE_APPLICATION_CREDENTIALS_JSON environment variable. "
+                    "Please ensure the entire content of key.json is properly copied and "
+                    "any special characters are properly escaped. "
+                    f"Error: {str(e)}"
+                )
         else:
             # Fall back to key.json for local development
             key_path = os.path.join(os.path.dirname(__file__), 'key.json')
             if not os.path.exists(key_path):
-                raise ValueError(f"Neither GOOGLE_APPLICATION_CREDENTIALS_JSON environment variable nor key.json found")
+                raise ValueError(
+                    "Google Cloud credentials not found. Please either:\n"
+                    "1. Set GOOGLE_APPLICATION_CREDENTIALS_JSON environment variable with the contents of key.json\n"
+                    "   - Copy entire content of key.json (including curly braces)\n"
+                    "   - Paste as environment variable value in Streamlit Cloud settings\n"
+                    "2. Or place key.json file in the same directory as cloud_storage.py for local development"
+                )
                 
             self.storage_client = storage.Client.from_service_account_json(
                 key_path,
