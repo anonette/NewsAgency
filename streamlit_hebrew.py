@@ -7,51 +7,57 @@ import tempfile
 try:
     st.write("Debug: Setting up credentials")
     
-    # Check for required secrets
-    if not hasattr(st.secrets, 'GOOGLE_APPLICATION_CREDENTIALS_JSON'):
+    # Debug: Print all available secrets
+    st.write("Debug: All available secrets:", dir(st.secrets))
+    st.write("Debug: Secrets dict:", st.secrets.to_dict())
+    
+    # Check for required secrets in general section
+    if not hasattr(st.secrets, 'general') or not hasattr(st.secrets.general, 'GOOGLE_APPLICATION_CREDENTIALS_JSON'):
+        st.write("Debug: Missing required secret in general section")
+        st.write("Debug: Available sections:", dir(st.secrets))
+        if hasattr(st.secrets, 'general'):
+            st.write("Debug: Available general secrets:", dir(st.secrets.general))
         raise ValueError(
-            "GOOGLE_APPLICATION_CREDENTIALS_JSON not found in Streamlit secrets.\n"
-            "Please add your service account credentials to Streamlit secrets."
+            "GOOGLE_APPLICATION_CREDENTIALS_JSON not found in Streamlit secrets general section.\n"
+            "Please add your service account credentials to Streamlit secrets under [general]."
         )
     
     # Get credentials from secrets
     st.write("Debug: Loading credentials from secrets")
-    raw_creds = st.secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON
+    raw_creds = st.secrets.general.GOOGLE_APPLICATION_CREDENTIALS_JSON
     st.write("Debug: Raw credentials type:", type(raw_creds))
     st.write("Debug: Raw credentials starts with:", raw_creds[:50] if raw_creds else "None")
     
-    # Clean up the JSON string
-    if isinstance(raw_creds, str):
-        # Remove any leading/trailing whitespace
-        cleaned_creds = raw_creds.strip()
-        # Remove any triple quotes if present
-        cleaned_creds = cleaned_creds.replace("'''", "")
-        st.write("Debug: Cleaned credentials start:", cleaned_creds[:50])
+    # Parse and clean credentials
+    try:
+        # Parse JSON and handle any formatting issues
+        creds_dict = json.loads(raw_creds)
+        st.write("Debug: Successfully parsed credentials JSON")
         
-        try:
-            creds_dict = json.loads(cleaned_creds)
-            st.write("Debug: Successfully parsed credentials JSON")
-        except json.JSONDecodeError as e:
-            st.write("Debug: JSON parse error:", str(e))
-            st.write("Debug: Error position:", e.pos)
-            st.write("Debug: Error line:", e.lineno)
-            st.write("Debug: Error column:", e.colno)
-            raise ValueError(
-                "Invalid JSON format in GOOGLE_APPLICATION_CREDENTIALS_JSON.\n"
-                "Please ensure the credentials are properly formatted in Streamlit secrets.\n"
-                f"Error: {str(e)}"
-            )
-    else:
-        st.write("Debug: Unexpected credentials type")
-        raise ValueError(
-            "GOOGLE_APPLICATION_CREDENTIALS_JSON must be a string.\n"
-            f"Got type: {type(raw_creds)}"
-        )
+        # Fix private key formatting if needed
+        private_key = creds_dict.get('private_key', '')
+        if private_key:
+            # Ensure proper line endings
+            private_key = private_key.replace('\\n', '\n')
+            if not private_key.startswith('-----BEGIN PRIVATE KEY-----\n'):
+                private_key = '-----BEGIN PRIVATE KEY-----\n' + private_key
+            if not private_key.endswith('\n-----END PRIVATE KEY-----\n'):
+                private_key = private_key + '\n-----END PRIVATE KEY-----\n'
+            creds_dict['private_key'] = private_key
+            st.write("Debug: Fixed private key formatting")
+        
+        # Create credentials object
+        from google.oauth2 import service_account
+        credentials = service_account.Credentials.from_service_account_info(creds_dict)
+        st.write("Debug: Created credentials object")
+    except Exception as e:
+        st.write("Debug: Error processing credentials:", str(e))
+        raise ValueError(f"Failed to process credentials: {str(e)}")
     
-    # Create credentials object
-    from google.oauth2 import service_account
-    credentials = service_account.Credentials.from_service_account_info(creds_dict)
-    st.write("Debug: Created credentials object")
+    # Get bucket name from secrets
+    bucket_name = getattr(st.secrets.general, 'BUCKET_NAME', 'israel-trends-archive')
+    st.write("Debug: Using bucket name:", bucket_name)
+    st.write("Debug: Available general attributes:", dir(st.secrets.general))
     
     # Set up storage client in session state
     from google.cloud import storage
@@ -60,6 +66,16 @@ try:
         credentials=credentials
     )
     st.write("Debug: Created storage client in session state")
+    
+    # Test bucket access
+    try:
+        bucket = st.session_state.storage_client.bucket(bucket_name)
+        # List a few blobs to test access
+        next(bucket.list_blobs(max_results=1), None)
+        st.write("Debug: Successfully accessed bucket")
+    except Exception as e:
+        st.write("Debug: Error accessing bucket:", str(e))
+        raise ValueError(f"Failed to access bucket {bucket_name}: {str(e)}")
 except Exception as e:
     st.error(f"Failed to set up credentials: {str(e)}")
     st.stop()
