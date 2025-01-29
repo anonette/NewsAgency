@@ -4,27 +4,32 @@ import os
 from datetime import datetime
 from cloud_storage import CloudStorage
 
-# Initialize cloud storage with error handling
-try:
-    # Get bucket name from Streamlit secrets or use default
-    bucket_name = st.secrets.get('BUCKET_NAME', 'israel-trends-archive') if hasattr(st.secrets, 'BUCKET_NAME') else 'israel-trends-archive'
-    storage = CloudStorage(bucket_name=bucket_name)
-except Exception as e:
-    import traceback
-    error_details = f"""
-    Error initializing cloud storage. Please check:
-    1. Google Cloud credentials are properly configured
-    2. BUCKET_NAME is set in Streamlit secrets (optional, defaults to 'israel-trends-archive')
-    3. Service account has necessary permissions
-    
-    Error: {str(e)}
-    
-    Stack trace:
-    {traceback.format_exc()}
-    """
-    st.error("Failed to initialize cloud storage")
-    st.code(error_details, language="text")
-    raise e
+# Initialize storage variable
+storage = None
+
+def initialize_storage():
+    """Initialize cloud storage with error handling"""
+    global storage
+    try:
+        # Get bucket name from Streamlit secrets or use default
+        bucket_name = st.secrets.get('BUCKET_NAME', 'israel-trends-archive') if hasattr(st.secrets, 'BUCKET_NAME') else 'israel-trends-archive'
+        storage = CloudStorage(bucket_name=bucket_name)
+    except Exception as e:
+        import traceback
+        error_details = f"""
+        Error initializing cloud storage. Please check:
+        1. Google Cloud credentials are properly configured
+        2. BUCKET_NAME is set in Streamlit secrets (optional, defaults to 'israel-trends-archive')
+        3. Service account has necessary permissions
+        
+        Error: {str(e)}
+        
+        Stack trace:
+        {traceback.format_exc()}
+        """
+        st.error("Failed to initialize cloud storage")
+        st.code(error_details, language="text")
+        raise e
 
 def load_analysis_by_date(date_str):
     """Load analysis JSON for a specific date"""
@@ -68,6 +73,9 @@ def main(config_set=False):
     st.title("🇮🇱 Israel Trends Analysis")
     st.markdown("### Browse Žižek-style analyses of Israeli trends")
 
+    # Initialize storage
+    initialize_storage()
+    
     # Get available dates
     dates = get_available_dates()
 
